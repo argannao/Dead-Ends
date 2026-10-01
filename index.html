@@ -1001,7 +1001,7 @@ $("searchForm").addEventListener("submit", async (e) => {
 function status(t, cls) { const s = $("loadStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); }
 
 async function fetchRoads(lat, lon, r, onProgress) {
-  const q = `[out:json][timeout:60];way["highway"~"^(${HIGHWAYS})$"]["access"!~"^(private|no)$"]["area"!="yes"](around:${r},${lat},${lon});out body qt;>;out skel qt;`;
+  const q = `[out:json][timeout:60];way["highway"~"^(${HIGHWAYS})$"]["area"!="yes"](around:${r},${lat},${lon});out body qt;>;out skel qt;`;
   const host = (u) => new URL(u).hostname;
   // On interroge le premier serveur ; s'il n'a pas commencé à répondre au bout de 8 s,
   // on lance aussi le suivant. Le premier qui répond gagne, les autres sont annulés.
