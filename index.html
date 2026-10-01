@@ -113,6 +113,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .lrow { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; }
 .lrow .coords { color: var(--ink); }
 .fine.slow { color: #e2b77a; }
+.fine.prefetch { color: var(--ok); min-height: 1em; margin: 0; }
 .lbar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .lfill { height: 100%; background: var(--sodium); transform: scaleX(0); transform-origin: left; transition: transform .3s ease-out; }
 
@@ -231,7 +232,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .ranking li:first-child .rk { color: var(--sodium); }
 .ranking .rrole { font-size: 12px; color: var(--muted); }
 .ranking .rt { font: 700 14px/1 var(--f-mono); font-variant-numeric: tabular-nums; }
-.caught.win { color: var(--sodium); }
+.caught.win { color: var(--sodium); text-shadow: 0 0 40px rgba(255,173,66,.45); font-size: 64px; }
+#stepOver.victory .results { border-color: var(--sodium); }
+.oversub { margin: 0; font-size: 15px; }
+.oversub .pdot { display: inline-block; vertical-align: -1px; }
+.ranking li.winner .rt { color: var(--sodium); }
+.vfx { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -308,11 +314,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
         <label><input type="radio" name="radius" id="r2500" value="2500"><span class="t">Large</span><span class="d">r = 2,5 km</span></label>
       </div>
       <label class="check"><input type="checkbox" id="withPaths" checked> <span>Inclure les chemins piétons et allées <span class="fine">(sentiers, passages, parkings)</span></span></label>
+      <p class="fine prefetch" id="hostPrefetch"></p>
       <button class="primary" id="loadBtn" disabled>Charger la zone</button>
     </div>
     <div class="step" id="guestZone" hidden>
       <span class="eyebrow">Le point de départ</span>
       <p class="note" id="guestZoneText">L'hôte choisit où l'infection commence…</p>
+      <p class="fine prefetch" id="guestPrefetch"></p>
     </div>
   </div>
 
@@ -352,6 +360,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
   <div class="step" id="stepOver" hidden>
     <p class="caught" id="overTitle">Rattrapé</p>
+    <p class="oversub" id="overSub" hidden></p>
     <ol class="ranking" id="ranking"></ol>
     <div class="results">
       <div><span class="k">Ta survie</span><span class="v" id="rTime">0:00.0</span></div>
@@ -814,6 +823,7 @@ function renderPlayers() {
 
 /* ---------------- Menu, création, connexion ---------------- */
 function goMenu(msg) {
+  sentKeys.clear(); recvKeys.clear(); partsIn.clear();
   if (net) { try { net.link.close(); } catch {} }
   net = null; isHost = true; myId = "host"; players = new Map(); zone = null; game = null; G = null;
   if (loadCtl) loadCtl.abort(); hideLoader();
@@ -880,6 +890,7 @@ function hostOnJoin(id, link) {
   if (state !== "lobby") { link.send({ t: "refused", why: "started" }); setTimeout(() => link.close(), 300); return; }
   if (players.size >= MAX_PLAYERS) { link.send({ t: "refused", why: "full" }); setTimeout(() => link.close(), 300); return; }
   const p = newPlayer(id, "Joueur", false); p.link = link; players.set(id, p);
+  sentKeys.clear(); if (zone) setTimeout(schedulePrefetch, 500); // le nouveau venu reçoit aussi les secteurs déjà chargés
   link.send({ t: "welcome", id });
   pushLobby();
 }
@@ -897,6 +908,7 @@ function hostOnData(id, m) {
     case "progress": p.load = { done: +m.done || 0, n: +m.n || 0 }; pushLobby(); break;
     case "loaded": p.loaded = !!m.ok; p.failed = !m.ok; pushLobby(); checkAllLoaded(); break;
     case "ready": if (state === "role") { p.ready = !!m.ready; p.role = ROLES[m.role] ? m.role : "coureur"; pushLobby(); } break;
+    case "cell": receiveCellPart(m, id); break;
     case "pos":
       if (state === "play" && G && p.alive) {
         p.x = +m.x; p.y = +m.y; p.dir = +m.dir || 0; p.trail = +m.trail || 0;
@@ -921,7 +933,7 @@ function guestOnData(m) {
       for (const q of m.players) players.set(q.id, Object.assign(prev.get(q.id) || { x: 0, y: 0, dir: 0, trail: 0 }, q));
       const zChanged = JSON.stringify(m.zone) !== JSON.stringify(zone);
       zone = m.zone;
-      if (zChanged && state === "lobby") showGuestZone();
+      if (zChanged && state === "lobby") { showGuestZone(); schedulePrefetch(); }
       renderPlayers(); refreshRoleButtons();
       break;
     }
@@ -931,7 +943,8 @@ function guestOnData(m) {
     case "start": startCountdown(); break;
     case "snap": applySnap(m); break;
     case "ev": handleEvent(m); break;
-    case "over": showResults(m.results, m.wave); break;
+    case "over": showResults(m.results, m.wave, m.winner); break;
+    case "cell": receiveCellPart(m, "host"); break;
   }
 }
 
@@ -954,7 +967,7 @@ function setupLobbyView() {
   $("loadBtn").textContent = net ? "Charger la zone pour tout le monde" : "Charger les rues";
 }
 function currentZone() { return picked ? { lat: picked.lat, lon: picked.lon, r: radius(), paths: $("withPaths").checked, fake: false } : null; }
-function zoneChanged() { if (!isHost) return; zone = currentZone(); pushLobby(); }
+function zoneChanged() { if (!isHost) return; zone = currentZone(); pushLobby(); schedulePrefetch(); }
 function showGuestZone() {
   if (zoneCircle) { zoneCircle.remove(); zoneCircle = null; }
   if (!zone) { $("guestZoneText").textContent = "L'hôte choisit où l'infection commence…"; return; }
@@ -973,7 +986,11 @@ function hostStartLoad(fake) {
   startLoading();
 }
 let lastProgSent = 0;
+let loadGen = 0; // numéro du chargement en cours : un ancien chargement qui finit en retard est ignoré
 async function startLoading() {
+  if (loadCtl) loadCtl.abort();
+  hideLoader();
+  const gen = ++loadGen;
   state = "loading"; showStep("stepLoad");
   $("retryBtn").hidden = true; $("fakeBtn").hidden = true; $("waitAll").hidden = true; lstatus("");
   if (roadsLayer) { roadsLayer.remove(); roadsLayer = null; }
@@ -981,7 +998,7 @@ async function startLoading() {
   zoneCircle = L.circle([zone.lat, zone.lon], { radius: zone.r, color: css("--sodium"), weight: 1.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
   map.fitBounds(zoneCircle.getBounds(), { paddingTopLeft: [window.innerWidth > 640 ? 400 : 0, 0] });
   pushLobby();
-  if (zone.fake) { finishLoading(fakeCity(zone.lat, zone.lon, zone.r), true); return; }
+  if (zone.fake) { finishLoading(fakeCity(zone.lat, zone.lon, zone.r), true, gen); return; }
   const cells = makeCells(zone.lat, zone.lon, zone.r);
   loading = { t0: performance.now(), cells, preview: L.layerGroup().addTo(map) };
   loading.timer = setInterval(() => {
@@ -995,11 +1012,14 @@ async function startLoading() {
   reportProgress(0, cells.length, true);
   try {
     const data = await fetchRoads(cells, onCell);
+    if (gen !== loadGen) return; // un autre chargement a pris le relais (ex. ville générée)
     $("lPhase").textContent = "Construction du réseau de rues…";
     await new Promise((r) => setTimeout(r, 40));
+    if (gen !== loadGen) return;
     hideLoader();
-    finishLoading(data, false);
+    finishLoading(data, false, gen);
   } catch (err) {
+    if (gen !== loadGen) return;
     hideLoader();
     if (state !== "loading") return;
     lstatus(err && err.name === "AbortError" ? "Chargement annulé." : "Impossible de récupérer toutes les rues (serveurs saturés ou hors ligne).", "err");
@@ -1018,7 +1038,8 @@ function reportLoaded(ok) {
   const p = me(); if (p) { p.loaded = ok; p.failed = !ok; }
   if (isHost) { pushLobby(); checkAllLoaded(); } else toHost({ t: "loaded", ok });
 }
-function finishLoading(data, generated) {
+function finishLoading(data, generated, gen) {
+  if (gen !== loadGen || state !== "loading") return; // jamais de changement de carte hors de la phase de chargement
   const g = buildGraph(data, zone.lat, zone.lon, zone.paths);
   if (!g || g.N < 20) {
     lstatus("Pas assez de rues dans cette zone.", "err");
@@ -1217,19 +1238,24 @@ function hostUpdate(dt) {
   }
 }
 function killPlayer(q) {
-  if (!q.alive) return;
+  if (!q.alive || state !== "play") return;
   q.alive = false; q.time = game.t;
   emit({ t: "ev", k: "dead", id: q.id, name: q.name, time: q.time });
   checkEnd();
 }
+// Fin de partie : en solo quand tu es rattrapé ; en multijoueur dès qu'il ne reste qu'un survivant (il gagne).
 function checkEnd() {
   if (!isHost || state !== "play") return;
-  if ([...players.values()].some((q) => q.alive)) return;
-  const results = [...players.values()]
+  const all = [...players.values()], alive = all.filter((q) => q.alive);
+  const multi = !!net && all.length > 1;
+  if (alive.length > (multi ? 1 : 0)) return;
+  const winner = multi && alive.length === 1 ? alive[0] : null;
+  if (winner) winner.time = game.t;
+  const results = all
     .map((q) => ({ id: q.id, name: q.name, color: q.color, role: q.role, time: q.time, trail: q.trail }))
-    .sort((a, b) => b.time - a.time);
-  const msg = { t: "over", results, wave: game.wave };
-  broadcast(msg); showResults(results, game.wave);
+    .sort((a, b) => (winner && a.id === winner.id ? -1 : winner && b.id === winner.id ? 1 : b.time - a.time));
+  const msg = { t: "over", results, wave: game.wave, winner: winner ? winner.id : null };
+  broadcast(msg); showResults(results, game.wave, msg.winner);
 }
 // Un message de l'hôte est appliqué localement et envoyé à tous
 function emit(m) { broadcast(m); handleEvent(m); }
@@ -1604,71 +1630,222 @@ $("searchForm").addEventListener("submit", async (e) => {
 function zstatus(t, cls) { const s = $("zoneStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); }
 
 /* ---------------- Chargement des rues par secteurs ---------------- */
+// Grille fixe d'environ 1 km de côté, calée sur les coordonnées (et non sur le point choisi) :
+// un même secteur garde la même clé d'une partie à l'autre, ce qui permet de le garder en cache.
+const CELL_DEG = 0.009;
 function makeCells(lat, lon, r) {
-  const size = r <= 800 ? 800 : r <= 1500 ? 1000 : 1250;
-  const n = Math.ceil((2 * r) / size), half = (n * size) / 2;
-  const kx = 111320 * Math.cos(lat * Math.PI / 180), ky = 110574;
+  const dLat = CELL_DEG, dLon = CELL_DEG / Math.cos(Math.floor(lat) * Math.PI / 180);
+  const ky = 110574, kx = 111320 * Math.cos(lat * Math.PI / 180);
+  const i0 = Math.floor((lat - r / ky) / dLat), i1 = Math.floor((lat + r / ky) / dLat);
+  const j0 = Math.floor((lon - r / kx) / dLon), j1 = Math.floor((lon + r / kx) / dLon);
   const cells = [];
-  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-    const x0 = -half + i * size, y0 = -half + j * size, x1 = x0 + size, y1 = y0 + size;
-    const cx = Math.max(x0, Math.min(0, x1)), cy = Math.max(y0, Math.min(0, y1));
-    if (Math.hypot(cx, cy) > r) continue;
-    cells.push({ s: lat + y0 / ky, n: lat + y1 / ky, w: lon + x0 / kx, e: lon + x1 / kx, st: "wait", d: Math.hypot(x0 + size / 2, y0 + size / 2) });
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+    const s = i * dLat, n = s + dLat, w = j * dLon, e = w + dLon;
+    const cy = Math.max(s, Math.min(lat, n)), cx = Math.max(w, Math.min(lon, e));
+    if (Math.hypot((cx - lon) * kx, (cy - lat) * ky) > r) continue; // garde les secteurs qui touchent le cercle
+    const d = Math.hypot(((w + e) / 2 - lon) * kx, ((s + n) / 2 - lat) * ky);
+    cells.push({ s, n, w, e, key: `${Math.floor(lat)}:${i}:${j}`, st: "wait", d });
   }
-  cells.sort((a, b) => a.d - b.d);
+  cells.sort((a, b) => a.d - b.d); // du centre vers l'extérieur
   return cells;
 }
-async function fetchRoads(cells, onCell) {
-  const ctls = new Set(); let aborted = false; const stat = { bytes: 0 };
-  loadCtl = { abort() { aborted = true; ctls.forEach((c) => c.abort()); } };
-  const nodes = new Map(), ways = new Map();
-  const fetchCell = async (c, worker) => {
-    const q = `[out:json][timeout:60];way["highway"~"^(${HIGHWAYS})$"]["area"!="yes"](${c.s},${c.w},${c.n},${c.e});out body qt;>;out skel qt;`;
+
+/* ---------- Cache des secteurs : mémoire + IndexedDB (30 jours) ---------- */
+const QVER = "q2:";             // à changer si la requête change, pour ignorer l'ancien cache
+const CACHE_DAYS = 30;
+const memCells = new Map(), inflight = new Map();
+let idbP = null;
+function idb() {
+  if (!idbP) idbP = new Promise((res) => {
+    try { const rq = indexedDB.open("deadends", 1); rq.onupgradeneeded = () => rq.result.createObjectStore("cells"); rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null); }
+    catch { res(null); }
+  });
+  return idbP;
+}
+async function idbGet(k) {
+  const db = await idb(); if (!db) return null;
+  return new Promise((res) => {
+    try { const r = db.transaction("cells").objectStore("cells").get(k); r.onsuccess = () => { const v = r.result; res(v && Date.now() - v.t < CACHE_DAYS * 864e5 ? v.d : null); }; r.onerror = () => res(null); }
+    catch { res(null); }
+  });
+}
+async function idbPut(k, txt) { const db = await idb(); if (!db) return; try { db.transaction("cells", "readwrite").objectStore("cells").put({ t: Date.now(), d: txt }, k); } catch {} }
+function memPut(k, d) { memCells.set(k, d); if (memCells.size > 60) memCells.delete(memCells.keys().next().value); }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const abortErr = () => new DOMException("Annulé", "AbortError");
+
+// Requête « couverte » : on interroge un serveur ; s'il n'a pas répondu au bout de 6 s, on en interroge
+// un deuxième, puis un troisième à 12 s. La première réponse valide gagne, les autres sont annulées.
+function netFetch(q, start) {
+  return new Promise((resolve, reject) => {
+    const ctls = []; let done = false, failed = 0, started = 0, lastErr = null;
+    const finish = (fn) => { if (done) return; done = true; timers.forEach(clearTimeout); fn(); };
+    const launch = () => {
+      if (done || started >= OVERPASS.length) return;
+      const url = OVERPASS[(start + started) % OVERPASS.length]; started++;
+      const ctl = new AbortController(); ctls.push(ctl);
+      fetch(url, { method: "POST", body: "data=" + encodeURIComponent(q), headers: { "Content-Type": "application/x-www-form-urlencoded" }, signal: ctl.signal })
+        .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+        .then((txt) => { if (!txt.startsWith("{")) throw new Error("réponse invalide"); finish(() => { ctls.forEach((c) => c !== ctl && c.abort()); resolve({ txt, host: new URL(url).hostname }); }); })
+        .catch((e) => {
+          if (done) return; failed++; lastErr = e;
+          if (started < OVERPASS.length) launch();               // erreur rapide : serveur suivant tout de suite
+          else if (failed >= started) finish(() => reject(lastErr));
+        });
+    };
+    const timers = [setTimeout(launch, 6000), setTimeout(launch, 12000), setTimeout(() => finish(() => { ctls.forEach((c) => c.abort()); reject(new Error("délai dépassé")); }), 65000)];
+    launch();
+  });
+}
+function cellQuery(c) {
+  const f = (v) => v.toFixed(6);
+  return `[out:json][timeout:60];way["highway"~"^(${HIGHWAYS})$"]["area"!="yes"](${f(c.s)},${f(c.w)},${f(c.n)},${f(c.e)});out body qt;>;out skel qt;`;
+}
+/* ---------- Partage des secteurs entre joueurs ----------
+   Dès qu'un joueur obtient un secteur (téléchargement ou cache), il l'envoie aux autres par la connexion
+   de jeu (compressé en gzip, découpé en morceaux). Un invité l'envoie à l'hôte, qui le relaie à tous.
+   Côté réception, le secteur arrive directement en cache : plus besoin de le demander à OpenStreetMap. */
+const sentKeys = new Set(), recvKeys = new Set(), sharedWait = new Map(), partsIn = new Map();
+const CHUNK = 48000;
+function waitShared(key) {
+  let w = sharedWait.get(key);
+  if (!w) { let res; const p = new Promise((r) => { res = r; }); w = { p, res }; sharedWait.set(key, w); }
+  return w.p;
+}
+function b64(bytes) { let s = ""; for (let i = 0; i < bytes.length; i += 32768) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768)); return btoa(s); }
+function unb64(str) { const s = atob(str); const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b; }
+async function packTxt(txt) {
+  if (typeof CompressionStream === "undefined") return { z: 0, d: txt };
+  const buf = new Uint8Array(await new Response(new Blob([txt]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+  return { z: 1, d: b64(buf) };
+}
+async function unpackTxt(z, d) {
+  if (!z) return d;
+  return await new Response(new Blob([unb64(d)]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+}
+async function shareCell(key, txt, except) {
+  if (!net || sentKeys.has(key)) return;
+  if (!isHost && recvKeys.has(key)) return; // un invité ne renvoie pas ce que l'hôte lui a déjà donné
+  sentKeys.add(key);
+  const { z, d } = await packTxt(txt);
+  const n = Math.ceil(d.length / CHUNK) || 1;
+  for (let i = 0; i < n; i++) {
+    const m = { t: "cell", key, i, n, z, d: d.slice(i * CHUNK, (i + 1) * CHUNK) };
+    if (isHost) { for (const q of players.values()) if (q.link && q.id !== except) q.link.send(m); }
+    else toHost(m);
+    if (i % 8 === 7) await sleep(0); // laisse respirer la boucle de jeu
+  }
+}
+async function receiveCellPart(m, fromId) {
+  let e = partsIn.get(m.key);
+  if (!e) { e = { parts: new Array(m.n), got: 0 }; partsIn.set(m.key, e); }
+  if (e.parts[m.i] === undefined) { e.parts[m.i] = m.d; e.got++; }
+  if (e.got < m.n) return;
+  partsIn.delete(m.key);
+  if (memCells.has(m.key)) return;
+  try {
+    const txt = await unpackTxt(m.z, e.parts.join(""));
+    const d = JSON.parse(txt);
+    recvKeys.add(m.key); memPut(m.key, d); idbPut(QVER + m.key, txt);
+    const w = sharedWait.get(m.key); if (w) w.res(d);
+    if (isHost) shareCell(m.key, txt, fromId); // l'hôte relaie aux autres joueurs
+  } catch {}
+}
+// Un secteur : mémoire -> IndexedDB -> envoyé par un autre joueur -> réseau.
+// Une même requête en cours est partagée (préchargement + chargement).
+function getCell(c, worker) {
+  if (memCells.has(c.key)) {
+    c.cached = true; if (recvKeys.has(c.key)) c.shared = true;
+    if (net && !sentKeys.has(c.key)) shareCell(c.key, JSON.stringify(memCells.get(c.key)));
+    return Promise.resolve(memCells.get(c.key));
+  }
+  if (inflight.has(c.key)) return inflight.get(c.key);
+  const p = (async () => {
+    const txt = await idbGet(QVER + c.key);
+    if (txt) { c.cached = true; shareCell(c.key, txt); return JSON.parse(txt); }
+    // En multijoueur, un invité laisse d'abord 2,5 s aux autres pour lui envoyer le secteur
+    if (net && !isHost) {
+      const got = await Promise.race([waitShared(c.key), sleep(2500).then(() => null)]);
+      if (got) { c.shared = true; return got; }
+    }
     let lastErr;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      if (aborted) throw new DOMException("Annulé", "AbortError");
-      const url = OVERPASS[(worker + attempt) % OVERPASS.length];
-      const ctl = new AbortController(); ctls.add(ctl);
-      const to = setTimeout(() => ctl.abort(), 60000);
+    for (let round = 0; round < 3; round++) {
       try {
-        c.server = new URL(url).hostname; onCell(c, stat.bytes);
-        const res = await fetch(url, { method: "POST", body: "data=" + encodeURIComponent(q), headers: { "Content-Type": "application/x-www-form-urlencoded" }, signal: ctl.signal });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const txt = await res.text(); stat.bytes += txt.length;
-        return JSON.parse(txt);
-      } catch (err) {
-        if (aborted) throw new DOMException("Annulé", "AbortError");
-        lastErr = err;
-        await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
-      } finally { clearTimeout(to); ctls.delete(ctl); }
+        const r = await Promise.race([netFetch(cellQuery(c), worker + round), waitShared(c.key).then((d) => ({ d }))]);
+        if (r.d) { c.shared = true; return r.d; }
+        c.server = r.host; idbPut(QVER + c.key, r.txt); shareCell(c.key, r.txt);
+        return JSON.parse(r.txt);
+      } catch (e) { lastErr = e; await sleep(1500 * (round + 1)); }
     }
     throw lastErr;
-  };
+  })();
+  inflight.set(c.key, p);
+  p.then((d) => memPut(c.key, d), () => {}).finally(() => inflight.delete(c.key));
+  return p;
+}
+async function fetchRoads(cells, onCell, workers = 4) {
+  let aborted = false, fire; const abortP = new Promise((_, rej) => { fire = () => rej(abortErr()); }); abortP.catch(() => {});
+  loadCtl = { abort() { if (!aborted) { aborted = true; fire(); } } };
+  const nodes = new Map(), ways = new Map();
   let next = 0;
   const worker = async (w) => {
     while (next < cells.length && !aborted) {
-      const c = cells[next++]; c.st = "load"; onCell(c, stat.bytes);
+      const c = cells[next++]; c.st = "load"; onCell(c);
       try {
-        const data = await fetchCell(c, w);
+        const data = await Promise.race([getCell(c, w), abortP]);
         for (const el of data.elements) (el.type === "node" ? nodes : ways).set(el.id, el);
-        c.st = "done"; c.data = data; onCell(c, stat.bytes);
-      } catch (err) { if (err.name !== "AbortError") { c.st = "fail"; onCell(c, stat.bytes); } throw err; }
+        c.st = "done"; c.data = data; onCell(c);
+      } catch (err) { if (err.name !== "AbortError") { c.st = "fail"; onCell(c); } throw err; }
     }
   };
-  try { await Promise.all([worker(0), worker(1)]); }
+  try { await Promise.all(Array.from({ length: Math.min(workers, cells.length) }, (_, w) => worker(w))); }
   catch (err) { loadCtl.abort(); throw err; }
   // ordre stable : mêmes données => même graphe chez tous les joueurs
   const byId = (a, b) => a.id - b.id;
   return { elements: [...[...nodes.values()].sort(byId), ...[...ways.values()].sort(byId)] };
 }
+
+/* ---------- Préchargement : dès que la zone est choisie, les rues se téléchargent en arrière-plan ---------- */
+let prefetchTimer = 0, prefetchTok = 0;
+function schedulePrefetch() {
+  clearTimeout(prefetchTimer);
+  const z = zone; const tok = ++prefetchTok;
+  if (!z || z.fake) { $("hostPrefetch").textContent = ""; $("guestPrefetch").textContent = ""; return; }
+  prefetchTimer = setTimeout(async () => {
+    const cells = makeCells(z.lat, z.lon, z.r);
+    const show = () => {
+      if (tok !== prefetchTok || state !== "lobby") return;
+      const done = cells.filter((c) => c.st === "done").length;
+      const t = done === cells.length ? `Rues de la zone déjà téléchargées (${done} / ${cells.length} secteurs) : le chargement sera immédiat.`
+        : `Préchargement des rues en arrière-plan : ${done} / ${cells.length} secteurs`;
+      $("hostPrefetch").textContent = t; $("guestPrefetch").textContent = t;
+    };
+    show();
+    let next = 0;
+    const worker = async (w) => {
+      while (next < cells.length && tok === prefetchTok && state === "lobby") {
+        const c = cells[next++];
+        try { await getCell(c, w); c.st = "done"; } catch { c.st = "fail"; }
+        show();
+      }
+    };
+    await Promise.all([worker(0), worker(1), worker(2)]);
+  }, 1200); // on attend que l'hôte arrête de bouger le point
+}
 let loadCtl = null, loading = null;
 const mo = (b) => b < 1e6 ? `${Math.max(1, Math.round(b / 1024))} Ko` : `${(b / 1e6).toFixed(1).replace(".", ",")} Mo`;
-function onCell(c, bytes) {
+function onCell(c) {
   if (!loading) return;
   const done = loading.cells.filter((x) => x.st === "done").length, N = loading.cells.length;
   $("lFill").style.transform = `scaleX(${done / N})`;
   $("lPhase").textContent = `Secteurs chargés : ${done} / ${N}`;
-  $("lHint").textContent = `${mo(bytes)} reçus${c.server ? ` · serveur ${c.server}` : ""}`;
+  const shared = loading.cells.filter((x) => x.st === "done" && x.shared).length;
+  const cached = loading.cells.filter((x) => x.st === "done" && x.cached && !x.shared).length;
+  const bits = [];
+  if (shared) bits.push(`${shared} reçu${shared > 1 ? "s" : ""} des autres joueurs`);
+  if (cached) bits.push(`${cached} repris du cache`);
+  if (c.server && !c.shared) bits.push(`serveur ${c.server}`);
+  $("lHint").textContent = bits.length ? bits.join(" · ") : "Connexion aux serveurs OpenStreetMap…";
   reportProgress(done, N, false);
   if (c.st === "done" && c.data) {
     const pts = new Map(); for (const el of c.data.elements) if (el.type === "node") pts.set(el.id, [el.lat, el.lon]);
@@ -1723,20 +1900,26 @@ function startCountdown() {
   };
   tick();
 }
-function showResults(results, wave) {
+function showResults(results, wave, winnerId) {
   state = "over"; if (game) { game.sprint = false; } drawPts = null;
   map.dragging.enable(); map.doubleClickZoom.enable();
   $("banner").hidden = true; $("threat").hidden = true; $("hud").hidden = true; $("countdown").innerHTML = "";
   const mine = results.find((r) => r.id === myId) || results[0];
-  const won = net && results.length > 1 && results[0].id === myId;
-  $("overTitle").textContent = won ? "Dernier survivant" : "Rattrapé";
-  $("overTitle").classList.toggle("win", !!won);
+  const winner = winnerId ? results.find((r) => r.id === winnerId) : null;
+  const won = !!winner && winner.id === myId;
+  $("overTitle").textContent = won ? "Victoire" : "Rattrapé";
+  $("overTitle").classList.toggle("win", won);
+  $("stepOver").classList.toggle("victory", won);
+  $("overSub").hidden = !winner;
+  if (winner) $("overSub").innerHTML = won
+    ? `Tu es le dernier survivant, après ${fmtTime(winner.time)} de fuite.`
+    : `<span class="pdot" style="background:${winner.color}"></span> <b>${winner.name}</b> remporte la partie.`;
   $("rTime").textContent = fmtTime(mine.time); $("rDist").textContent = fmtDist(mine.trail);
   $("rWave").textContent = String(wave); $("rZomb").textContent = String(game ? game.zombies.length : 0);
   const ol = $("ranking"); ol.innerHTML = ""; ol.hidden = !net;
   results.forEach((r, i) => {
-    const li = document.createElement("li"); if (r.id === myId) li.className = "me";
-    li.innerHTML = `<span class="rk">${i + 1}</span><span class="pdot" style="background:${r.color}"></span><span class="pname">${r.name}</span><span class="rrole">${ROLES[r.role] ? ROLES[r.role].name : ""}</span><span class="rt">${fmtTime(r.time)}</span>`;
+    const li = document.createElement("li"); li.className = (r.id === myId ? "me " : "") + (r.id === winnerId ? "winner" : "");
+    li.innerHTML = `<span class="rk">${i + 1}</span><span class="pdot" style="background:${r.color}"></span><span class="pname">${r.name}${r.id === winnerId ? ' <span class="tag">Vainqueur</span>' : ""}</span><span class="rrole">${ROLES[r.role] ? ROLES[r.role].name : ""}</span><span class="rt">${fmtTime(r.time)}</span>`;
     ol.appendChild(li);
   });
   let best = 0; try { best = +localStorage.getItem("deadends.best") || 0; } catch {}
@@ -1745,6 +1928,21 @@ function showResults(results, wave) {
   else { rb.textContent = `Ton record : ${fmtTime(best)}`; rb.className = "best"; }
   $("againBtn").hidden = !isHost; $("elsewhereBtn").hidden = !isHost; $("overWait").hidden = isHost;
   $("panel").hidden = false; showStep("stepOver");
+  if (won) victoryFx();
+}
+// Petite pluie d'étincelles couleur sodium pour le vainqueur
+function victoryFx() {
+  const cv = document.createElement("canvas"); cv.className = "vfx"; document.body.appendChild(cv);
+  const c2 = cv.getContext("2d"); const W = (cv.width = innerWidth), H = (cv.height = innerHeight);
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const parts = Array.from({ length: reduce ? 0 : 140 }, () => ({ x: Math.random() * W, y: -20 - Math.random() * H * 0.6, vx: (Math.random() - 0.5) * 1.5, vy: 2 + Math.random() * 3, s: 2 + Math.random() * 3, h: Math.random() < 0.7 }));
+  const t0 = performance.now();
+  const step = (now) => {
+    const t = (now - t0) / 1000; c2.clearRect(0, 0, W, H);
+    for (const p of parts) { p.x += p.vx; p.y += p.vy; c2.globalAlpha = Math.max(0, 1 - t / 4); c2.fillStyle = p.h ? "#ffad42" : "#f4f8ff"; c2.fillRect(p.x, p.y, p.s, p.s * 2); }
+    if (t < 4 && state === "over") requestAnimationFrame(step); else cv.remove();
+  };
+  requestAnimationFrame(step);
 }
 
 /* ---------------- Boutons ---------------- */
