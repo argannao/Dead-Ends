@@ -1,0 +1,947 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Point Zéro</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Mise en page : carte plein écran, un panneau de préparation à gauche, un HUD discret pendant la fuite.
+   Univers visuel : ville la nuit, lampadaires au sodium, signalétique d'urgence au pochoir. Thème sombre assumé. */
+:root {
+  color-scheme: dark;
+  --night: #0b0f14;         /* fond, ville éteinte */
+  --panel: #121820;         /* panneaux */
+  --line: #263240;          /* filets, bordures */
+  --ink: #e6edf3;           /* texte principal */
+  --muted: #8a99a8;         /* texte secondaire */
+  --sodium: #ffad42;        /* accent : lampadaire au sodium, route tracée */
+  --blood: #e5484d;         /* zombies, danger */
+  --runner: #f4f8ff;        /* le joueur */
+  --ok: #4cc38a;
+
+  --f-display: "Big Shoulders Stencil Display", "Big Shoulders Stencil", "Oswald", Impact, "Arial Narrow", sans-serif;
+  --f-body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --f-label: "Barlow Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--night); color: var(--ink); font: 15px/1.45 var(--f-body); overflow: hidden; }
+button, input { font: inherit; color: inherit; }
+
+#map { position: absolute; inset: 0; background: var(--night); }
+#map.drawing, #map.drawing .leaflet-interactive { cursor: crosshair !important; }
+.leaflet-container { background: var(--night); font-family: var(--f-body); }
+.leaflet-control-attribution { background: rgba(11,15,20,.75) !important; color: var(--muted) !important; font-size: 10px; }
+.leaflet-control-attribution a { color: var(--muted) !important; }
+.leaflet-bar a { background: var(--panel); color: var(--ink); border-bottom-color: var(--line); }
+.leaflet-bar a:hover { background: #1a2230; color: var(--ink); }
+#fx { position: absolute; inset: 0; pointer-events: none; z-index: 450; }
+
+/* ---------- Panneau de préparation ---------- */
+#panel {
+  position: absolute; z-index: 800; top: 16px; left: 16px; width: min(380px, calc(100% - 32px));
+  max-height: calc(100% - 32px); overflow: auto;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.55);
+  padding: 20px; display: flex; flex-direction: column; gap: 16px;
+}
+.brand { display: flex; flex-direction: column; gap: 2px; }
+.brand h1 {
+  margin: 0; font: 900 46px/0.9 var(--f-display); letter-spacing: .02em; color: var(--sodium);
+  text-transform: uppercase;
+}
+.brand p { margin: 0; color: var(--muted); font-size: 14px; max-width: 34ch; }
+.eyebrow { font: 600 12px/1 var(--f-label); text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
+.step { display: flex; flex-direction: column; gap: 10px; }
+.row { display: flex; gap: 8px; }
+.row > * { min-width: 0; }
+input[type=text] {
+  flex: 1; background: var(--night); border: 1px solid var(--line); border-radius: 4px; padding: 9px 11px;
+}
+input[type=text]:focus-visible, button:focus-visible { outline: 2px solid var(--sodium); outline-offset: 2px; }
+button { cursor: pointer; border: 1px solid var(--line); background: #18202b; border-radius: 4px; padding: 9px 13px; }
+button:hover:not(:disabled) { border-color: #3a4a5c; background: #1d2734; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.primary {
+  background: var(--sodium); color: #1a1006; border-color: var(--sodium);
+  font: 700 17px/1 var(--f-label); text-transform: uppercase; letter-spacing: .08em; padding: 13px 16px;
+}
+.primary:hover:not(:disabled) { background: #ffbd66; border-color: #ffbd66; }
+.ghost { background: transparent; color: var(--muted); }
+.coords { font: 500 12px/1.4 var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.coords b { color: var(--ink); font-weight: 500; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg label { text-align: center; padding: 8px 4px; cursor: pointer; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 1px; }
+.seg label:first-child { border-left: 0; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg .t { font: 600 14px/1.1 var(--f-label); text-transform: uppercase; letter-spacing: .05em; }
+.seg .d { font: 500 11px/1.1 var(--f-mono); color: var(--muted); }
+.seg label:has(input:checked) { background: #241b0e; color: var(--sodium); }
+.seg label:has(input:checked) .d { color: #c89452; }
+.seg label:has(input:focus-visible) { outline: 2px solid var(--sodium); outline-offset: -2px; }
+.status { font-size: 13px; color: var(--muted); min-height: 1.4em; }
+.status.err { color: #ff9b9e; }
+.status.good { color: var(--ok); }
+
+.roles { display: flex; flex-direction: column; gap: 8px; }
+.role {
+  display: grid; grid-template-columns: 46px 1fr; gap: 12px; align-items: center;
+  padding: 11px 12px; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; background: var(--night);
+}
+.role input { position: absolute; opacity: 0; pointer-events: none; }
+.role .glyph {
+  width: 46px; height: 46px; display: grid; place-items: center; border-radius: 4px;
+  background: #18202b; font: 900 26px/1 var(--f-display); color: var(--muted);
+}
+.role .name { font: 700 18px/1.1 var(--f-label); text-transform: uppercase; letter-spacing: .05em; }
+.role .perk { font-size: 13px; color: var(--muted); }
+.role .perk b { color: var(--ink); font-weight: 600; font-family: var(--f-mono); font-size: 12px; }
+.role:has(input:checked) { border-color: var(--sodium); background: #1a140b; }
+.role:has(input:checked) .glyph { background: var(--sodium); color: #1a1006; }
+.role:has(input:focus-visible) { outline: 2px solid var(--sodium); outline-offset: 2px; }
+
+.results { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.results div { background: var(--night); padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.results .v { font: 700 22px/1.1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.results .k { font: 600 11px/1 var(--f-label); text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.caught { font: 900 54px/0.9 var(--f-display); color: var(--blood); text-transform: uppercase; margin: 0; }
+.best { font-size: 13px; color: var(--muted); }
+.best.new { color: var(--sodium); }
+
+/* ---------- HUD ---------- */
+#hud { position: absolute; inset: 0; z-index: 700; pointer-events: none; }
+.stats {
+  position: absolute; top: 16px; left: 16px; display: grid; grid-template-columns: auto auto; gap: 4px 16px;
+  background: rgba(11,15,20,.82); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px;
+}
+.stats .k { font: 600 11px/1.6 var(--f-label); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.stats .v { font: 700 15px/1.4 var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.stats .v.big { font-size: 22px; color: var(--sodium); }
+.stats .role-tag { grid-column: 1 / -1; font: 700 12px/1 var(--f-label); text-transform: uppercase; letter-spacing: .12em; color: var(--sodium); padding-bottom: 6px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+#banner {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px);
+  font: 700 16px/1.2 var(--f-label); text-transform: uppercase; letter-spacing: .1em; text-align: center;
+  padding: 10px 16px; border-radius: 4px; background: rgba(11,15,20,.85); border: 1px solid var(--line);
+  transition: opacity .3s;
+}
+#banner.danger { color: #fff; background: rgba(120,20,24,.9); border-color: var(--blood); }
+#threat {
+  position: absolute; top: 68px; left: 50%; transform: translateX(-50%); font: 700 13px/1 var(--f-mono); padding: 9px 12px; border-radius: 4px;
+  background: rgba(120,20,24,.88); border: 1px solid var(--blood); font-variant-numeric: tabular-nums;
+}
+.stamina {
+  position: absolute; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  width: min(320px, calc(100% - 140px)); display: flex; flex-direction: column; gap: 6px; align-items: center;
+}
+.stamina .bar { width: 100%; height: 8px; border-radius: 4px; background: rgba(11,15,20,.85); border: 1px solid var(--line); overflow: hidden; }
+.stamina .fill { height: 100%; width: 100%; background: var(--sodium); transform-origin: left; }
+.stamina .fill.low { background: var(--blood); }
+.stamina .lbl { font: 600 11px/1 var(--f-label); text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
+.stamina .lbl.on { color: var(--sodium); }
+.help {
+  position: absolute; left: 16px; bottom: calc(26px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 4px;
+  font-size: 12px; color: var(--muted); background: rgba(11,15,20,.75); padding: 8px 10px; border-radius: 4px; border: 1px solid var(--line);
+}
+.help kbd { font: 600 11px/1 var(--f-mono); color: var(--ink); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; padding: 2px 5px; background: var(--panel); }
+#sprintBtn {
+  position: absolute; right: 16px; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); pointer-events: auto;
+  width: 74px; height: 74px; border-radius: 50%; font: 700 14px/1 var(--f-label); text-transform: uppercase; letter-spacing: .08em;
+  background: rgba(36,27,14,.9); border: 2px solid var(--sodium); color: var(--sodium); display: none;
+  touch-action: none; user-select: none;
+}
+@media (pointer: coarse) { #sprintBtn { display: block; } .help { display: none; } }
+
+/* ---------- Compte à rebours ---------- */
+#countdown { position: absolute; inset: 0; z-index: 900; display: grid; place-items: center; pointer-events: none; }
+#countdown span {
+  font: 900 min(42vw, 300px)/1 var(--f-display); color: var(--sodium);
+  text-shadow: 0 0 60px rgba(255,173,66,.45), 0 6px 0 rgba(0,0,0,.6);
+  animation: pop .8s cubic-bezier(.2,.9,.3,1) both;
+}
+#countdown span.go { color: var(--runner); text-shadow: 0 0 70px rgba(255,255,255,.4), 0 6px 0 rgba(0,0,0,.6); }
+@keyframes pop { 0% { transform: scale(1.6); opacity: 0; } 25% { transform: scale(1); opacity: 1; } 80% { opacity: 1; } 100% { transform: scale(.85); opacity: 0; } }
+#flash { position: absolute; inset: 0; z-index: 650; pointer-events: none; background: radial-gradient(circle, transparent 40%, rgba(229,72,77,.55)); opacity: 0; transition: opacity .25s; }
+
+@media (max-width: 640px) {
+  #panel { top: auto; bottom: 12px; left: 12px; width: calc(100% - 24px); max-height: 62%; padding: 16px; }
+  .brand h1 { font-size: 38px; }
+  .stats { top: 12px; left: 12px; padding: 9px 11px; }
+  #banner { top: auto; bottom: 110px; font-size: 13px; }
+  #threat { top: auto; bottom: 156px; }
+}
+@media (prefers-reduced-motion: reduce) { #countdown span { animation-duration: .01s; animation-delay: 0s; opacity: 1; } }
+</style>
+</head>
+<body>
+<div id="map" aria-label="Carte du jeu"></div>
+<canvas id="fx"></canvas>
+<div id="flash"></div>
+
+<!-- Panneau : choix du lieu, du rôle, puis résultats -->
+<section id="panel" aria-live="polite">
+  <div class="brand">
+    <h1>Point Zéro</h1>
+    <p id="tagline">Choisis où l'infection commence. Tout le monde part de là, et les zombies aussi.</p>
+  </div>
+
+  <div class="step" id="stepPlace">
+    <span class="eyebrow">1 · Le point de départ</span>
+    <form class="row" id="searchForm">
+      <input type="text" id="searchInput" placeholder="Une adresse, une ville…" autocomplete="off">
+      <button type="submit">Chercher</button>
+    </form>
+    <div class="coords" id="pickInfo">Clique sur la carte pour placer le point zéro.</div>
+    <span class="eyebrow">Taille de la zone</span>
+    <div class="seg" role="radiogroup" aria-label="Taille de la zone">
+      <label><input type="radio" name="radius" id="r800" value="800"><span class="t">Quartier</span><span class="d">r = 800 m</span></label>
+      <label><input type="radio" name="radius" id="r1500" value="1500" checked><span class="t">Ville</span><span class="d">r = 1,5 km</span></label>
+      <label><input type="radio" name="radius" id="r2500" value="2500"><span class="t">Large</span><span class="d">r = 2,5 km</span></label>
+    </div>
+    <button class="primary" id="loadBtn" disabled>Charger les rues</button>
+    <div class="status" id="loadStatus"></div>
+    <button class="ghost" id="fakeBtn" hidden>Jouer sur une ville générée</button>
+  </div>
+
+  <div class="step" id="stepRole" hidden>
+    <span class="eyebrow">2 · Ton rôle</span>
+    <div class="roles">
+      <label class="role"><input type="radio" name="role" id="roleCoureur" value="coureur" checked>
+        <span class="glyph">C</span>
+        <span><span class="name">Coureur</span><br><span class="perk">Vitesse de course <b>+15 %</b></span></span></label>
+      <label class="role"><input type="radio" name="role" id="roleEclaireur" value="eclaireur">
+        <span class="glyph">É</span>
+        <span><span class="name">Éclaireur</span><br><span class="perk">Vision <b>300 m</b> au lieu de 170 m</span></span></label>
+      <label class="role"><input type="radio" name="role" id="roleEndurant" value="endurant">
+        <span class="glyph">E</span>
+        <span><span class="name">Endurant</span><br><span class="perk">Endurance <b>×1,9</b>, récupère <b>+50 %</b></span></span></label>
+    </div>
+    <button class="primary" id="readyBtn">Prêt</button>
+    <button class="ghost" id="backBtn">Changer de lieu</button>
+  </div>
+
+  <div class="step" id="stepOver" hidden>
+    <p class="caught">Rattrapé</p>
+    <div class="results">
+      <div><span class="k">Survie</span><span class="v" id="rTime">0:00.0</span></div>
+      <div><span class="k">Distance</span><span class="v" id="rDist">0 m</span></div>
+      <div><span class="k">Vague</span><span class="v" id="rWave">0</span></div>
+      <div><span class="k">Zombies</span><span class="v" id="rZomb">0</span></div>
+    </div>
+    <div class="best" id="rBest"></div>
+    <button class="primary" id="againBtn">Rejouer ici</button>
+    <button class="ghost" id="elsewhereBtn">Changer de lieu</button>
+  </div>
+</section>
+
+<div id="hud" hidden>
+  <div class="stats">
+    <span class="role-tag" id="hRole">Coureur</span>
+    <span class="k">Survie</span><span class="v big" id="hTime">0:00.0</span>
+    <span class="k">Vague</span><span class="v" id="hWave">–</span>
+    <span class="k">Zombies</span><span class="v" id="hZomb">0</span>
+    <span class="k">Distance</span><span class="v" id="hDist">0 m</span>
+  </div>
+  <div id="banner" hidden></div>
+  <div id="threat" hidden></div>
+  <div class="stamina">
+    <div class="bar"><div class="fill" id="hStam"></div></div>
+    <span class="lbl" id="hStamLbl">Endurance · Espace pour sprinter</span>
+  </div>
+  <div class="help">
+    <span><kbd>Clic</kbd> courir vers un point</span>
+    <span><kbd>Shift</kbd> + glisser : tracer ton chemin</span>
+    <span><kbd>Espace</kbd> sprint</span>
+  </div>
+  <button id="sprintBtn" aria-label="Sprint">Sprint</button>
+</div>
+<div id="countdown"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+"use strict";
+/* =====================================================================
+   POINT ZÉRO — prototype solo
+   Carte : OpenStreetMap (tuiles CARTO), réseau routier via Overpass.
+   ===================================================================== */
+
+const CFG = {
+  zombieDelay: 15,      // s avant la première vague
+  waveEvery: 20,        // s entre deux vagues
+  waveBase: 3,          // zombies dans la vague 1
+  waveInc: 2,           // zombies en plus à chaque vague
+  zSpeed: 4.2,          // m/s, vague 1
+  zSpeedInc: 0.16,      // m/s gagnés par vague
+  zSpeedMax: 7.4,
+  runSpeed: 5.0,        // m/s, course normale
+  sprintMul: 1.5,
+  stamina: 100,
+  drain: 24,            // par seconde de sprint
+  regen: 11,            // par seconde sans sprint
+  catchDist: 7,         // m
+  vision: 170,          // m
+  fieldEvery: 0.25,     // s entre deux recalculs du champ de poursuite
+  playZoom: 17,
+};
+const ROLES = {
+  coureur:   { name: "Coureur",   speedMul: 1.15, vision: CFG.vision, stamina: CFG.stamina,       regenMul: 1 },
+  eclaireur: { name: "Éclaireur", speedMul: 1,    vision: 300,        stamina: CFG.stamina,       regenMul: 1 },
+  endurant:  { name: "Endurant",  speedMul: 1,    vision: CFG.vision, stamina: CFG.stamina * 1.9, regenMul: 1.5 },
+};
+const OVERPASS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+];
+const HIGHWAYS = "trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|service|pedestrian|footway|path|cycleway|track|steps|road";
+
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const $ = (id) => document.getElementById(id);
+const hyp = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+
+/* ---------------- Carte ---------------- */
+const map = L.map("map", { zoomControl: true, boxZoom: false, preferCanvas: true, worldCopyJump: true })
+  .setView([46.6, 2.4], 6);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+  subdomains: "abcd", maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+}).addTo(map);
+map.zoomControl.setPosition("topright");
+
+let pickMarker = null, zoneCircle = null, roadsLayer = null;
+let picked = null;          // {lat, lon}
+let G = null;               // graphe routier
+let state = "pick";         // pick | role | countdown | play | over
+
+/* ---------------- Tas binaire (Dijkstra / A*) ---------------- */
+class Heap {
+  constructor() { this.k = []; this.v = []; this.topK = 0; }
+  get size() { return this.k.length; }
+  push(key, val) {
+    const k = this.k, v = this.v; let i = k.length; k.push(key); v.push(val);
+    while (i > 0) { const p = (i - 1) >> 1; if (k[p] <= key) break; k[i] = k[p]; v[i] = v[p]; i = p; }
+    k[i] = key; v[i] = val;
+  }
+  pop() {
+    const k = this.k, v = this.v; const top = v[0]; this.topK = k[0];
+    const lk = k.pop(), lv = v.pop(); const n = k.length;
+    if (n > 0) {
+      let i = 0;
+      for (;;) { const l = 2 * i + 1; if (l >= n) break; const r = l + 1; const m = (r < n && k[r] < k[l]) ? r : l; if (k[m] >= lk) break; k[i] = k[m]; v[i] = v[m]; i = m; }
+      k[i] = lk; v[i] = lv;
+    }
+    return top;
+  }
+}
+
+/* ---------------- Graphe routier ---------------- */
+function buildGraph(data, lat0, lon0) {
+  const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110574;
+  const idOf = new Map(); const xs = [], ys = [];
+  for (const el of data.elements) if (el.type === "node") { idOf.set(el.id, xs.length); xs.push((el.lon - lon0) * kx); ys.push((el.lat - lat0) * ky); }
+  const nb = Array.from({ length: xs.length }, () => []);
+  const seen = new Set(); const rawWays = [];
+  for (const el of data.elements) {
+    if (el.type !== "way" || !el.nodes) continue;
+    const w = [];
+    for (let i = 0; i < el.nodes.length; i++) {
+      const a = idOf.get(el.nodes[i]);
+      if (a === undefined) { if (w.length > 1) rawWays.push(w.slice()); w.length = 0; continue; }
+      if (w.length) {
+        const b = w[w.length - 1];
+        if (a !== b) { const key = a < b ? a + "_" + b : b + "_" + a; if (!seen.has(key)) { seen.add(key); nb[a].push(b); nb[b].push(a); } }
+      }
+      w.push(a);
+    }
+    if (w.length > 1) rawWays.push(w);
+  }
+  if (!xs.length) return null;
+  // Plus grande composante accessible depuis le nœud le plus proche du point choisi
+  let start = -1, bd = Infinity;
+  for (let i = 0; i < xs.length; i++) { if (!nb[i].length) continue; const d = xs[i] * xs[i] + ys[i] * ys[i]; if (d < bd) { bd = d; start = i; } }
+  if (start < 0) return null;
+  const newId = new Int32Array(xs.length).fill(-1); const order = [start]; newId[start] = 0;
+  for (let q = 0; q < order.length; q++) for (const m of nb[order[q]]) if (newId[m] < 0) { newId[m] = order.length; order.push(m); }
+  const N = order.length;
+  const X = new Float64Array(N), Y = new Float64Array(N);
+  order.forEach((o, i) => { X[i] = xs[o]; Y[i] = ys[o]; });
+  const deg = new Int32Array(N + 1);
+  order.forEach((o, i) => { deg[i + 1] = nb[o].length; });
+  for (let i = 0; i < N; i++) deg[i + 1] += deg[i];
+  const adjTo = new Int32Array(deg[N]), adjLen = new Float64Array(deg[N]);
+  const EA = [], EB = [];
+  order.forEach((o, i) => {
+    let p = deg[i];
+    for (const m of nb[o]) { const j = newId[m]; adjTo[p] = j; adjLen[p] = Math.max(0.01, hyp(X[i], Y[i], X[j], Y[j])); p++; if (i < j) { EA.push(i); EB.push(j); } }
+  });
+  // Tracés à afficher (seulement la composante jouable)
+  const ways = [];
+  for (const w of rawWays) {
+    let cur = [];
+    for (const o of w) { const j = newId[o]; if (j < 0) { if (cur.length > 1) ways.push(cur); cur = []; } else cur.push(j); }
+    if (cur.length > 1) ways.push(cur);
+  }
+  const g = { N, X, Y, adjStart: deg, adjTo, adjLen, EA: Int32Array.from(EA), EB: Int32Array.from(EB), ways, lat0, lon0, kx, ky, spawn: 0 };
+  buildGrid(g);
+  // stamps pour la recherche de chemin
+  g.gArr = new Float64Array(N); g.gStamp = new Int32Array(N); g.closed = new Int32Array(N); g.prev = new Int32Array(N); g.stamp = 0;
+  g.dist = new Float64Array(N); g.next = new Int32Array(N);
+  return g;
+}
+const CELL = 40;
+function buildGrid(g) {
+  const grid = new Map();
+  for (let e = 0; e < g.EA.length; e++) {
+    const a = g.EA[e], b = g.EB[e];
+    const x0 = Math.floor(Math.min(g.X[a], g.X[b]) / CELL), x1 = Math.floor(Math.max(g.X[a], g.X[b]) / CELL);
+    const y0 = Math.floor(Math.min(g.Y[a], g.Y[b]) / CELL), y1 = Math.floor(Math.max(g.Y[a], g.Y[b]) / CELL);
+    for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
+      const k = cx + "," + cy; let l = grid.get(k); if (!l) grid.set(k, l = []); l.push(e);
+    }
+  }
+  g.grid = grid; g.eStamp = new Int32Array(g.EA.length); g.eS = 0;
+}
+// Point le plus proche sur une rue : {x, y, a, b, d}
+function snap(x, y, maxR = 400) {
+  const g = G; g.eS++;
+  let best = null, bd = Infinity;
+  const cx0 = Math.floor(x / CELL), cy0 = Math.floor(y / CELL), R = Math.ceil(maxR / CELL);
+  for (let r = 0; r <= R; r++) {
+    for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const l = g.grid.get((cx0 + dx) + "," + (cy0 + dy)); if (!l) continue;
+      for (const e of l) {
+        if (g.eStamp[e] === g.eS) continue; g.eStamp[e] = g.eS;
+        const a = g.EA[e], b = g.EB[e];
+        const ax = g.X[a], ay = g.Y[a], vx = g.X[b] - ax, vy = g.Y[b] - ay;
+        const L2 = vx * vx + vy * vy;
+        let t = L2 > 0 ? ((x - ax) * vx + (y - ay) * vy) / L2 : 0; t = Math.max(0, Math.min(1, t));
+        const px = ax + vx * t, py = ay + vy * t, d = hyp(x, y, px, py);
+        if (d < bd) {
+          bd = d;
+          if (t === 0) best = { x: ax, y: ay, a, b: a };
+          else if (t === 1) best = { x: g.X[b], y: g.Y[b], a: b, b };
+          else best = { x: px, y: py, a, b };
+        }
+      }
+    }
+    if (best && bd < r * CELL) break;
+  }
+  if (best) best.d = bd;
+  return best;
+}
+function sameEdge(P, Q) {
+  if (P.a === P.b) return P.a === Q.a || P.a === Q.b;
+  if (Q.a === Q.b) return Q.a === P.a || Q.a === P.b;
+  return (P.a === Q.a && P.b === Q.b) || (P.a === Q.b && P.b === Q.a);
+}
+// A* entre deux positions (chacune posée sur une rue). Renvoie une liste de points de passage.
+function route(S, T) {
+  const g = G;
+  const finalWp = { x: T.x, y: T.y, n: -1, ea: T.a, eb: T.b };
+  if (sameEdge(S, T)) return [finalWp];
+  const st = ++g.stamp; const H = new Heap();
+  const h = (n) => hyp(g.X[n], g.Y[n], T.x, T.y);
+  const seed = (n) => { const c = hyp(S.x, S.y, g.X[n], g.Y[n]); if (g.gStamp[n] !== st || c < g.gArr[n]) { g.gStamp[n] = st; g.gArr[n] = c; g.prev[n] = -1; H.push(c + h(n), n); } };
+  seed(S.a); if (S.b !== S.a) seed(S.b);
+  const extra = (n) => (n === T.a || n === T.b) ? hyp(g.X[n], g.Y[n], T.x, T.y) : -1;
+  let best = Infinity, bestN = -1;
+  while (H.size) {
+    const n = H.pop(); if (H.topK >= best) break;
+    if (g.closed[n] === st) continue; g.closed[n] = st;
+    const gn = g.gArr[n]; const ex = extra(n);
+    if (ex >= 0 && gn + ex < best) { best = gn + ex; bestN = n; }
+    for (let p = g.adjStart[n]; p < g.adjStart[n + 1]; p++) {
+      const m = g.adjTo[p], c = gn + g.adjLen[p];
+      if (g.gStamp[m] !== st || c < g.gArr[m]) { g.gStamp[m] = st; g.gArr[m] = c; g.prev[m] = n; H.push(c + h(m), m); }
+    }
+  }
+  if (bestN < 0) return null;
+  const nodes = []; for (let n = bestN; n >= 0; n = g.prev[n]) nodes.push(n);
+  nodes.reverse();
+  const wps = nodes.map((n) => ({ x: g.X[n], y: g.Y[n], n }));
+  wps.push(finalWp);
+  return wps;
+}
+// Champ de poursuite : distance de chaque carrefour au joueur + prochain carrefour à prendre
+function computeField(P) {
+  const g = G; const dist = g.dist, next = g.next; dist.fill(Infinity); next.fill(-1);
+  const H = new Heap();
+  const seed = (n) => { const d = hyp(P.x, P.y, g.X[n], g.Y[n]); if (d < dist[n]) { dist[n] = d; H.push(d, n); } };
+  seed(P.a); if (P.b !== P.a) seed(P.b);
+  while (H.size) {
+    const n = H.pop(); const d = H.topK; if (d > dist[n]) continue;
+    for (let p = g.adjStart[n]; p < g.adjStart[n + 1]; p++) {
+      const m = g.adjTo[p], c = d + g.adjLen[p];
+      if (c < dist[m]) { dist[m] = c; next[m] = n; H.push(c, m); }
+    }
+  }
+}
+
+/* ---------------- Conversion coordonnées ---------------- */
+const toLL = (x, y) => L.latLng(G.lat0 + y / G.ky, G.lon0 + x / G.kx);
+const toXY = (ll) => ({ x: (ll.lng - G.lon0) * G.kx, y: (ll.lat - G.lat0) * G.ky });
+
+/* ---------------- Déplacement le long des rues ---------------- */
+function advance(ent, dist) {
+  while (dist > 1e-9 && ent.route.length) {
+    const w = ent.route[0];
+    if (w.n >= 0) {
+      if (ent.a === ent.b) { if (ent.a !== w.n) ent.b = w.n; }
+      else if (w.n === ent.a) { ent.a = ent.b; ent.b = w.n; }
+    } else { ent.a = w.ea; ent.b = w.eb; }
+    const dx = w.x - ent.x, dy = w.y - ent.y, d = Math.hypot(dx, dy);
+    if (d <= dist) {
+      ent.x = w.x; ent.y = w.y; dist -= d; ent.route.shift();
+      if (w.n >= 0) { ent.a = ent.b = w.n; }
+      if (ent.trail !== undefined) ent.trail += d;
+    } else {
+      ent.x += dx / d * dist; ent.y += dy / d * dist;
+      if (ent.trail !== undefined) ent.trail += dist;
+      if (ent.dir !== undefined) ent.dir = Math.atan2(dy, dx);
+      dist = 0;
+    }
+  }
+  return dist;
+}
+
+/* ---------------- Partie ---------------- */
+let game = null;
+function newGame(roleKey) {
+  const r = ROLES[roleKey];
+  const s = G.spawn;
+  game = {
+    role: roleKey, R: r, t: 0, phase: "countdown",
+    player: { x: G.X[s], y: G.Y[s], a: s, b: s, route: [], trail: 0, dir: 0, stamina: r.stamina },
+    zombies: [], wave: 0, nextWave: CFG.zombieDelay, pending: [], fieldT: 0, sprint: false, lastBanner: "",
+  };
+  computeField(game.player);
+}
+function waveSpeed(k) { return Math.min(CFG.zSpeedMax, CFG.zSpeed + CFG.zSpeedInc * (k - 1)); }
+function spawnZombie(k) {
+  const s = G.spawn;
+  const ang = Math.random() * Math.PI * 2;
+  game.zombies.push({
+    x: G.X[s], y: G.Y[s], a: s, b: s, route: [],
+    speed: waveSpeed(k) * (0.9 + Math.random() * 0.2),
+    ox: Math.cos(ang) * 3, oy: Math.sin(ang) * 3, // léger décalage visuel pour ne pas tous se superposer
+    wob: Math.random() * 10,
+  });
+}
+function zombieThink(z) {
+  const P = game.player;
+  const direct = { x: P.x, y: P.y, n: -1, ea: P.a, eb: P.b };
+  if (sameEdge(z, P)) { z.route = [direct]; return; }
+  if (z.a === z.b) {
+    const nx = G.next[z.a];
+    if (nx < 0) { z.route = [direct]; return; }
+    z.route = [{ x: G.X[nx], y: G.Y[nx], n: nx }];
+  } else {
+    const da = hyp(z.x, z.y, G.X[z.a], G.Y[z.a]) + G.dist[z.a];
+    const db = hyp(z.x, z.y, G.X[z.b], G.Y[z.b]) + G.dist[z.b];
+    const t = da < db ? z.a : z.b;
+    z.route = [{ x: G.X[t], y: G.Y[t], n: t }];
+  }
+}
+
+function update(dt) {
+  const gm = game; const P = gm.player;
+  gm.t += dt;
+  // Vagues
+  if (gm.t >= gm.nextWave) {
+    gm.wave++; const n = CFG.waveBase + CFG.waveInc * (gm.wave - 1);
+    for (let i = 0; i < n; i++) gm.pending.push(gm.t + i * 0.35);
+    gm.nextWave += CFG.waveEvery;
+    banner(gm.wave === 1 ? "Ils sortent du point zéro" : `Vague ${gm.wave} · ${n} zombies`, true, 2600);
+    flash();
+  }
+  while (gm.pending.length && gm.pending[0] <= gm.t) { gm.pending.shift(); spawnZombie(gm.wave); }
+  if (gm.wave === 0) {
+    const left = Math.ceil(gm.nextWave - gm.t);
+    const txt = `Les zombies sortent dans ${left} s`;
+    if (txt !== gm.lastBanner) { gm.lastBanner = txt; banner(txt, false, 0); }
+  }
+  // Joueur
+  const moving = P.route.length > 0;
+  const wantSprint = gm.sprint && moving && P.stamina > 0;
+  if (wantSprint) P.stamina = Math.max(0, P.stamina - CFG.drain * dt);
+  else if (!gm.sprint || !moving) P.stamina = Math.min(gm.R.stamina, P.stamina + CFG.regen * gm.R.regenMul * dt);
+  const speed = CFG.runSpeed * gm.R.speedMul * (wantSprint ? CFG.sprintMul : 1);
+  advance(P, speed * dt);
+  gm.sprinting = wantSprint;
+  // Champ de poursuite
+  gm.fieldT -= dt;
+  if (gm.fieldT <= 0) { computeField(P); gm.fieldT = CFG.fieldEvery; }
+  // Zombies
+  for (const z of gm.zombies) {
+    let left = z.speed * dt;
+    for (let i = 0; i < 4 && left > 1e-6; i++) { zombieThink(z); left = advance(z, left); }
+    if (hyp(z.x, z.y, P.x, P.y) < CFG.catchDist) { gameOver(); return; }
+  }
+}
+
+/* ---------------- Rendu (canvas par-dessus la carte) ---------------- */
+const fx = $("fx"); const ctx = fx.getContext("2d");
+let DPR = 1;
+function resizeFx() {
+  DPR = window.devicePixelRatio || 1;
+  const r = map.getContainer().getBoundingClientRect();
+  fx.width = Math.round(r.width * DPR); fx.height = Math.round(r.height * DPR);
+  fx.style.width = r.width + "px"; fx.style.height = r.height + "px";
+}
+window.addEventListener("resize", resizeFx); resizeFx();
+const COL = {};
+function readColors() { for (const k of ["sodium", "blood", "runner", "night", "ink"]) COL[k] = css("--" + k); }
+readColors();
+const px = (x, y) => map.latLngToContainerPoint(toLL(x, y));
+function metersToPx(m) {
+  const c = map.getCenter(); const p1 = map.latLngToContainerPoint(c);
+  const p2 = map.latLngToContainerPoint(L.latLng(c.lat, c.lng + m / (111320 * Math.cos(c.lat * Math.PI / 180))));
+  return Math.abs(p2.x - p1.x);
+}
+let drawPts = null; // tracé en cours (Shift + glisser), en coordonnées écran via latlng
+function render(now) {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, fx.width, fx.height);
+  if (!G) return;
+  const W = fx.width / DPR, Hh = fx.height / DPR;
+  const s = px(G.X[G.spawn], G.Y[G.spawn]);
+  const inGame = game && (state === "play" || state === "countdown" || state === "over");
+
+  if (inGame) {
+    const P = game.player; const pp = px(P.x, P.y);
+    const vis = metersToPx(game.R.vision);
+    // brouillard au-delà de la vision
+    ctx.save();
+    ctx.fillStyle = "rgba(5,7,10,0.55)"; ctx.fillRect(0, 0, W, Hh);
+    ctx.globalCompositeOperation = "destination-out";
+    const grd = ctx.createRadialGradient(pp.x, pp.y, vis * 0.75, pp.x, pp.y, vis);
+    grd.addColorStop(0, "rgba(0,0,0,1)"); grd.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(pp.x, pp.y, vis, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = "rgba(255,173,66,0.18)"; ctx.lineWidth = 1; ctx.setLineDash([2, 6]);
+    ctx.beginPath(); ctx.arc(pp.x, pp.y, vis, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // point zéro
+  const pulse = (now / 1000) % 1.6 / 1.6;
+  ctx.strokeStyle = COL.blood; ctx.lineWidth = 2;
+  ctx.globalAlpha = 1 - pulse; ctx.beginPath(); ctx.arc(s.x, s.y, 8 + pulse * 26, 0, Math.PI * 2); ctx.stroke();
+  ctx.globalAlpha = 1; ctx.fillStyle = COL.blood;
+  ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s.x - 11, s.y); ctx.lineTo(s.x + 11, s.y); ctx.moveTo(s.x, s.y - 11); ctx.lineTo(s.x, s.y + 11); ctx.stroke();
+
+  if (!inGame) return;
+  const P = game.player; const pp = px(P.x, P.y);
+  // chemin prévu
+  if (P.route.length) {
+    ctx.strokeStyle = COL.sodium; ctx.lineWidth = 3; ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.setLineDash([7, 7]); ctx.lineDashOffset = -now / 40;
+    ctx.beginPath(); ctx.moveTo(pp.x, pp.y);
+    for (const w of P.route) { const q = px(w.x, w.y); ctx.lineTo(q.x, q.y); }
+    ctx.stroke(); ctx.setLineDash([]);
+    const last = P.route[P.route.length - 1]; const q = px(last.x, last.y);
+    ctx.fillStyle = COL.sodium; ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, Math.PI * 2); ctx.fill();
+  }
+  // tracé en cours
+  if (drawPts && drawPts.length > 1) {
+    ctx.strokeStyle = "rgba(244,248,255,0.75)"; ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath();
+    drawPts.forEach((ll, i) => { const q = map.latLngToContainerPoint(ll); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); });
+    ctx.stroke();
+  }
+  // zombies (seulement dans le champ de vision)
+  const vm = game.R.vision; const zr = Math.max(4, Math.min(8, metersToPx(4)));
+  for (const z of game.zombies) {
+    const d = hyp(z.x, z.y, P.x, P.y); if (d > vm) continue;
+    const a = Math.min(1, (vm - d) / (vm * 0.2));
+    const wob = Math.sin(now / 140 + z.wob) * 0.8;
+    const q = px(z.x + z.ox + wob, z.y + z.oy);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = "rgba(229,72,77,0.25)"; ctx.beginPath(); ctx.arc(q.x, q.y, zr * 2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = COL.blood; ctx.strokeStyle = "#2a0709"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(q.x, q.y, zr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  // joueur
+  const r = 7;
+  if (game.sprinting) { ctx.fillStyle = "rgba(255,173,66,0.3)"; ctx.beginPath(); ctx.arc(pp.x, pp.y, r * 2.4, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = COL.runner; ctx.strokeStyle = COL.sodium; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(pp.x, pp.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  // direction
+  const dx = Math.cos(P.dir), dy = -Math.sin(P.dir);
+  ctx.fillStyle = COL.sodium; ctx.beginPath();
+  ctx.moveTo(pp.x + dx * (r + 9), pp.y + dy * (r + 9));
+  ctx.lineTo(pp.x + dx * (r + 2) - dy * 5, pp.y + dy * (r + 2) + dx * 5);
+  ctx.lineTo(pp.x + dx * (r + 2) + dy * 5, pp.y + dy * (r + 2) - dx * 5);
+  ctx.closePath(); ctx.fill();
+}
+
+/* ---------------- HUD ---------------- */
+const fmtTime = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s < 10 ? "0" : ""}${s.toFixed(1)}`; };
+const fmtDist = (m) => m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2).replace(".", ",")} km`;
+let bannerTimer = 0;
+function banner(text, danger, ms) {
+  const b = $("banner"); b.textContent = text; b.hidden = false; b.classList.toggle("danger", !!danger);
+  clearTimeout(bannerTimer); if (ms) bannerTimer = setTimeout(() => { b.hidden = true; }, ms);
+}
+function flash() { const f = $("flash"); f.style.opacity = 1; setTimeout(() => (f.style.opacity = 0), 260); }
+function updateHud() {
+  const gm = game, P = gm.player;
+  $("hTime").textContent = fmtTime(gm.t);
+  $("hWave").textContent = gm.wave ? String(gm.wave) : "–";
+  $("hZomb").textContent = String(gm.zombies.length);
+  $("hDist").textContent = fmtDist(P.trail);
+  const ratio = P.stamina / gm.R.stamina;
+  const fill = $("hStam"); fill.style.transform = `scaleX(${ratio})`; fill.classList.toggle("low", ratio < 0.25);
+  const lbl = $("hStamLbl"); lbl.classList.toggle("on", !!gm.sprinting);
+  lbl.textContent = gm.sprinting ? "Sprint" : (ratio < 0.02 ? "À bout de souffle" : "Endurance · Espace pour sprinter");
+  let near = Infinity; for (const z of gm.zombies) near = Math.min(near, hyp(z.x, z.y, P.x, P.y));
+  const th = $("threat");
+  if (near <= gm.R.vision) { th.hidden = false; th.textContent = `Zombie à ${Math.round(near)} m`; } else th.hidden = true;
+}
+
+/* ---------------- Boucle ---------------- */
+let last = performance.now();
+function frame(now) {
+  let dt = (now - last) / 1000; last = now;
+  if (dt > 0.25) dt = 0.016; // onglet en arrière-plan : on ne saute pas dans le temps
+  if (state === "play" && game) {
+    const steps = Math.ceil(dt / 0.02); for (let i = 0; i < steps && state === "play"; i++) update(dt / steps);
+    if (state === "play") { followCam(); updateHud(); }
+  }
+  render(now);
+  requestAnimationFrame(frame);
+}
+function followCam() {
+  const ll = toLL(game.player.x, game.player.y);
+  const c = map.latLngToContainerPoint(ll), m = map.latLngToContainerPoint(map.getCenter());
+  if (Math.abs(c.x - m.x) > 1 || Math.abs(c.y - m.y) > 1) map.setView(ll, map.getZoom(), { animate: false });
+}
+requestAnimationFrame(frame);
+
+/* ---------------- Entrées ---------------- */
+let suppressClick = 0;
+map.on("click", (e) => {
+  if (state === "pick") { setPick(e.latlng); return; }
+  if (state !== "play") return;
+  if (performance.now() < suppressClick || (e.originalEvent && e.originalEvent.shiftKey)) return;
+  goTo(e.latlng);
+});
+function goTo(ll) {
+  const p = toXY(ll); const T = snap(p.x, p.y, 600); if (!T) return;
+  const r = route(game.player, T); if (r) game.player.route = r;
+}
+const mapEl = map.getContainer();
+mapEl.addEventListener("mousedown", (e) => {
+  if (state !== "play" || !e.shiftKey || e.button !== 0) return;
+  e.preventDefault(); e.stopPropagation();
+  drawPts = [map.mouseEventToLatLng(e)];
+}, true);
+window.addEventListener("mousemove", (e) => {
+  if (!drawPts) return;
+  const ll = map.mouseEventToLatLng(e);
+  const lastP = map.latLngToContainerPoint(drawPts[drawPts.length - 1]), q = map.latLngToContainerPoint(ll);
+  if (Math.hypot(q.x - lastP.x, q.y - lastP.y) > 5) drawPts.push(ll);
+});
+window.addEventListener("mouseup", () => {
+  if (!drawPts) return;
+  const pts = drawPts; drawPts = null; suppressClick = performance.now() + 250;
+  if (state !== "play") return;
+  if (pts.length < 2) { goTo(pts[0]); return; }
+  followDrawn(pts);
+});
+// Recolle le dessin aux rues : échantillonne le trait, aimante chaque point, relie par le plus court chemin
+function followDrawn(pts) {
+  const xy = pts.map(toXY);
+  const samples = [xy[0]]; let acc = 0; const STEP = 22;
+  for (let i = 1; i < xy.length; i++) {
+    const a = xy[i - 1], b = xy[i]; let seg = hyp(a.x, a.y, b.x, b.y), t0 = 0;
+    while (acc + seg - t0 >= STEP) { const need = STEP - acc; t0 += need; const f = t0 / seg; samples.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f }); acc = 0; }
+    acc += seg - t0;
+  }
+  samples.push(xy[xy.length - 1]);
+  const snapped = [];
+  for (const s of samples.slice(0, 160)) {
+    const T = snap(s.x, s.y, 80); if (!T || T.d > 80) continue;
+    const prev = snapped[snapped.length - 1];
+    if (prev && hyp(prev.x, prev.y, T.x, T.y) < 12) continue;
+    snapped.push(T);
+  }
+  if (!snapped.length) return;
+  let from = { x: game.player.x, y: game.player.y, a: game.player.a, b: game.player.b };
+  const all = [];
+  for (const T of snapped) {
+    const r = route(from, T); if (!r) continue;
+    all.push(...r); from = T;
+  }
+  if (all.length) game.player.route = all;
+}
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Shift" && state === "play") mapEl.classList.add("drawing");
+  if (e.code === "Space" && state === "play") { e.preventDefault(); game.sprint = true; }
+});
+window.addEventListener("keyup", (e) => {
+  if (e.key === "Shift") mapEl.classList.remove("drawing");
+  if (e.code === "Space" && game) game.sprint = false;
+});
+window.addEventListener("blur", () => { if (game) game.sprint = false; drawPts = null; mapEl.classList.remove("drawing"); });
+const sb = $("sprintBtn");
+sb.addEventListener("pointerdown", (e) => { e.preventDefault(); if (game) game.sprint = true; });
+["pointerup", "pointercancel", "pointerleave"].forEach((ev) => sb.addEventListener(ev, () => { if (game) game.sprint = false; }));
+
+/* ---------------- Préparation ---------------- */
+function showStep(id) {
+  for (const s of ["stepPlace", "stepRole", "stepOver"]) $(s).hidden = s !== id;
+  $("tagline").hidden = id === "stepOver";
+}
+function radius() { return +document.querySelector('input[name="radius"]:checked').value; }
+function setPick(ll) {
+  picked = { lat: ll.lat, lon: ll.lng };
+  if (!pickMarker) pickMarker = L.circleMarker(ll, { radius: 7, color: css("--blood"), weight: 2, fillColor: css("--blood"), fillOpacity: 0.5 }).addTo(map);
+  else pickMarker.setLatLng(ll);
+  drawZone();
+  $("pickInfo").innerHTML = `Point zéro : <b>${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}</b>`;
+  $("loadBtn").disabled = false;
+  if (map.getZoom() < 14) map.setView(ll, 15);
+}
+function drawZone() {
+  if (!picked) return;
+  if (zoneCircle) zoneCircle.remove();
+  zoneCircle = L.circle([picked.lat, picked.lon], { radius: radius(), color: css("--sodium"), weight: 1.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
+}
+document.querySelectorAll('input[name="radius"]').forEach((r) => r.addEventListener("change", drawZone));
+
+$("searchForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const q = $("searchInput").value.trim(); if (!q) return;
+  status("Recherche…");
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, { headers: { "Accept-Language": "fr" } });
+    const j = await res.json();
+    if (!j.length) { status("Aucun lieu trouvé pour cette recherche.", "err"); return; }
+    const ll = L.latLng(+j[0].lat, +j[0].lon); map.setView(ll, 16); setPick(ll);
+    status(j[0].display_name.split(",").slice(0, 3).join(","));
+  } catch { status("La recherche ne répond pas. Clique directement sur la carte.", "err"); }
+});
+function status(t, cls) { const s = $("loadStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); }
+
+async function fetchRoads(lat, lon, r) {
+  const q = `[out:json][timeout:40];way["highway"~"^(${HIGHWAYS})$"]["access"!~"^(private|no)$"]["area"!="yes"](around:${r},${lat},${lon});(._;>;);out skel qt;`;
+  let lastErr;
+  for (const url of OVERPASS) {
+    try {
+      const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 45000);
+      const res = await fetch(url, { method: "POST", body: "data=" + encodeURIComponent(q), headers: { "Content-Type": "application/x-www-form-urlencoded" }, signal: ctl.signal });
+      clearTimeout(to);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return await res.json();
+    } catch (err) { lastErr = err; }
+  }
+  throw lastErr;
+}
+$("loadBtn").addEventListener("click", async () => {
+  if (!picked) return;
+  $("loadBtn").disabled = true; $("fakeBtn").hidden = true;
+  status("Téléchargement des rues depuis OpenStreetMap…");
+  try {
+    const data = await fetchRoads(picked.lat, picked.lon, radius());
+    useGraph(data, false);
+  } catch (err) {
+    status("Impossible de récupérer les rues (serveur saturé ou hors ligne). Réessaie, ou joue sur une ville générée.", "err");
+    $("fakeBtn").hidden = false;
+  } finally { $("loadBtn").disabled = false; }
+});
+$("fakeBtn").addEventListener("click", () => {
+  if (!picked) { const c = map.getCenter(); setPick(c); }
+  useGraph(fakeCity(picked.lat, picked.lon, radius()), true);
+});
+function useGraph(data, generated) {
+  const g = buildGraph(data, picked.lat, picked.lon);
+  if (!g || g.N < 20) { status("Pas assez de rues ici. Choisis un point plus proche d'une zone habitée.", "err"); return; }
+  G = g;
+  if (roadsLayer) roadsLayer.remove();
+  const lines = G.ways.map((w) => w.map((n) => toLL(G.X[n], G.Y[n])));
+  roadsLayer = L.polyline(lines, { color: css("--sodium"), opacity: generated ? 0.55 : 0.22, weight: generated ? 3 : 2, interactive: false }).addTo(map);
+  if (pickMarker) { pickMarker.remove(); pickMarker = null; }
+  const total = G.EA.length;
+  status(`${G.N.toLocaleString("fr-FR")} carrefours et ${total.toLocaleString("fr-FR")} tronçons chargés${generated ? " (ville générée)" : ""}.`, "good");
+  map.setView(toLL(G.X[G.spawn], G.Y[G.spawn]), 16);
+  state = "role"; showStep("stepRole");
+}
+// Ville de secours, générée (si Overpass ne répond pas)
+function fakeCity(lat0, lon0, R) {
+  let seed = 1234567; const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
+  const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110574;
+  const step = 90, n = Math.ceil(R / step); const els = []; const ids = new Map(); let id = 1;
+  for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) {
+    const x = i * step + (rnd() - 0.5) * 30, y = j * step + (rnd() - 0.5) * 30;
+    if (Math.hypot(x, y) > R * 1.05) continue;
+    ids.set(i + "," + j, id); els.push({ type: "node", id: id++, lat: lat0 + y / ky, lon: lon0 + x / kx });
+  }
+  const way = (a, b) => { const A = ids.get(a), B = ids.get(b); if (A && B) els.push({ type: "way", id: id++, nodes: [A, B] }); };
+  for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) {
+    if (rnd() > 0.14) way(i + "," + j, (i + 1) + "," + j);
+    if (rnd() > 0.14) way(i + "," + j, i + "," + (j + 1));
+    if (i === j || i === -j - 1) way(i + "," + j, (i + 1) + "," + (j + 1));
+  }
+  return { elements: els };
+}
+
+function startCountdown() {
+  const roleKey = document.querySelector('input[name="role"]:checked').value;
+  newGame(roleKey);
+  $("panel").hidden = true; $("hud").hidden = false; $("hRole").textContent = ROLES[roleKey].name;
+  $("banner").hidden = true; $("threat").hidden = true;
+  if (zoneCircle) zoneCircle.remove();
+  zoneCircle = L.circle([picked.lat, picked.lon], { radius: radius(), color: css("--blood"), weight: 1.5, opacity: 0.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
+  map.dragging.disable(); map.doubleClickZoom.disable();
+  map.setView(toLL(game.player.x, game.player.y), CFG.playZoom, { animate: false });
+  updateHud();
+  state = "countdown";
+  const cd = $("countdown"); const seq = ["3", "2", "1", "GO"]; let i = 0;
+  const tick = () => {
+    if (state !== "countdown") return;
+    cd.innerHTML = ""; if (i >= seq.length) { state = "play"; last = performance.now(); return; }
+    const sp = document.createElement("span"); sp.textContent = seq[i]; if (seq[i] === "GO") sp.className = "go";
+    cd.appendChild(sp); i++; setTimeout(tick, seq[i - 1] === "GO" ? 700 : 800);
+  };
+  tick();
+}
+function gameOver() {
+  state = "over"; flash();
+  game.sprint = false; drawPts = null;
+  map.dragging.enable(); map.doubleClickZoom.enable();
+  $("banner").hidden = true; $("threat").hidden = true; $("hud").hidden = true;
+  $("rTime").textContent = fmtTime(game.t); $("rDist").textContent = fmtDist(game.player.trail);
+  $("rWave").textContent = String(game.wave); $("rZomb").textContent = String(game.zombies.length);
+  let best = 0; try { best = +localStorage.getItem("pointzero.best") || 0; } catch {}
+  const rb = $("rBest");
+  if (game.t > best) { try { localStorage.setItem("pointzero.best", String(game.t)); } catch {} rb.textContent = "Nouveau record de survie."; rb.className = "best new"; }
+  else { rb.textContent = `Record : ${fmtTime(best)}`; rb.className = "best"; }
+  $("panel").hidden = false; showStep("stepOver");
+}
+$("readyBtn").addEventListener("click", startCountdown);
+$("againBtn").addEventListener("click", () => { state = "role"; game = null; showStep("stepRole"); drawZone(); });
+function backToPick() {
+  state = "pick"; game = null; G = null;
+  if (roadsLayer) { roadsLayer.remove(); roadsLayer = null; }
+  if (picked) setPick(L.latLng(picked.lat, picked.lon));
+  status(""); $("fakeBtn").hidden = true; showStep("stepPlace");
+}
+$("backBtn").addEventListener("click", backToPick);
+$("elsewhereBtn").addEventListener("click", backToPick);
+document.fonts && document.fonts.ready.then(readColors);
+
+// Accès pour le débogage depuis la console
+window.PZ = { get G() { return G; }, get game() { return game; }, get state() { return state; }, CFG, ROLES, route, snap, computeField, followDrawn, toLL };
+</script>
+</body>
+</html>
