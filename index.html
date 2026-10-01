@@ -931,6 +931,7 @@ function guestOnData(m) {
     case "lobby": {
       const prev = players; players = new Map();
       for (const q of m.players) players.set(q.id, Object.assign(prev.get(q.id) || { x: 0, y: 0, dir: 0, trail: 0 }, q));
+      const mine = players.get(myId); if (mine && state === "loading" && myLoad.n) mine.load = { ...myLoad }; // ma progression locale est plus à jour
       const zChanged = JSON.stringify(m.zone) !== JSON.stringify(zone);
       zone = m.zone;
       if (zChanged && state === "lobby") { showGuestZone(); schedulePrefetch(); }
@@ -1028,7 +1029,9 @@ async function startLoading() {
     reportLoaded(false);
   }
 }
+let myLoad = { done: 0, n: 0 };
 function reportProgress(done, n, force) {
+  myLoad = { done, n };
   const p = me(); if (p) p.load = { done, n };
   const now = performance.now();
   if (!isHost && (force || now - lastProgSent > 250 || done === n)) { lastProgSent = now; toHost({ t: "progress", done, n }); }
@@ -1348,8 +1351,10 @@ function render(now) {
       if (c.st === "done") { ctx.fillStyle = "rgba(255,173,66,0.10)"; ctx.fillRect(x, y, w, h); ctx.strokeStyle = "rgba(255,173,66,0.35)"; ctx.lineWidth = 1; }
       else if (c.st === "load") { ctx.fillStyle = `rgba(255,173,66,${0.05 + 0.08 * pulse})`; ctx.fillRect(x, y, w, h); ctx.strokeStyle = `rgba(255,173,66,${0.5 + 0.5 * pulse})`; ctx.lineWidth = 2; }
       else if (c.st === "fail") { ctx.strokeStyle = "rgba(229,72,77,0.8)"; ctx.lineWidth = 2; }
+      else if (c.st === "share") { ctx.globalAlpha = 0.45 + 0.35 * pulse; ctx.strokeStyle = c.color || "rgba(138,153,168,0.6)"; ctx.lineWidth = 2; }
       else { ctx.strokeStyle = "rgba(138,153,168,0.35)"; ctx.lineWidth = 1; }
-      ctx.setLineDash(c.st === "wait" ? [4, 6] : []); ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); ctx.setLineDash([]);
+      ctx.setLineDash(c.st === "wait" || c.st === "share" ? [4, 6] : []); ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
     }
   }
   if (!G) return;
@@ -1748,12 +1753,16 @@ async function receiveCellPart(m, fromId) {
     const d = JSON.parse(txt);
     recvKeys.add(m.key); memPut(m.key, d); idbPut(QVER + m.key, txt);
     const w = sharedWait.get(m.key); if (w) w.res(d);
+    markArrived(m.key);
     if (isHost) shareCell(m.key, txt, fromId); // l'hôte relaie aux autres joueurs
   } catch {}
 }
 // Un secteur : mémoire -> IndexedDB -> envoyé par un autre joueur -> réseau.
 // Une même requête en cours est partagée (préchargement + chargement).
-function getCell(c, worker) {
+// Un secteur : mémoire -> IndexedDB -> envoyé par un autre joueur -> réseau.
+// waitMs : en multijoueur, temps laissé au joueur responsable du secteur pour nous l'envoyer
+// avant de le télécharger nous-mêmes. onSteal est appelé si on finit par le télécharger.
+function getCell(c, worker, waitMs = 0, onSteal) {
   if (memCells.has(c.key)) {
     c.cached = true; if (recvKeys.has(c.key)) c.shared = true;
     if (net && !sentKeys.has(c.key)) shareCell(c.key, JSON.stringify(memCells.get(c.key)));
@@ -1763,10 +1772,10 @@ function getCell(c, worker) {
   const p = (async () => {
     const txt = await idbGet(QVER + c.key);
     if (txt) { c.cached = true; shareCell(c.key, txt); return JSON.parse(txt); }
-    // En multijoueur, un invité laisse d'abord 2,5 s aux autres pour lui envoyer le secteur
-    if (net && !isHost) {
-      const got = await Promise.race([waitShared(c.key), sleep(2500).then(() => null)]);
+    if (net && waitMs > 0) {
+      const got = await Promise.race([waitShared(c.key), sleep(waitMs).then(() => null)]);
       if (got) { c.shared = true; return got; }
+      c.stolen = true; if (onSteal) onSteal(c); // trop long : on le télécharge nous-mêmes
     }
     let lastErr;
     for (let round = 0; round < 3; round++) {
@@ -1783,53 +1792,78 @@ function getCell(c, worker) {
   p.then((d) => memPut(c.key, d), () => {}).finally(() => inflight.delete(c.key));
   return p;
 }
-async function fetchRoads(cells, onCell, workers = 4) {
-  let aborted = false, fire; const abortP = new Promise((_, rej) => { fire = () => rej(abortErr()); }); abortP.catch(() => {});
-  loadCtl = { abort() { if (!aborted) { aborted = true; fire(); } } };
-  const nodes = new Map(), ways = new Map();
-  let next = 0;
+
+/* ---------- Répartition des secteurs entre joueurs ----------
+   Les secteurs (triés du centre vers l'extérieur) sont distribués à tour de rôle entre les joueurs,
+   dans le même ordre chez tout le monde. Chacun télécharge d'abord les siens et les partage.
+   Quand il a fini, il attend ceux des autres ; si l'un d'eux tarde plus de STEAL_WAIT, il le télécharge lui-même. */
+const STEAL_WAIT = 4000;
+function assignCells(cells) {
+  const ids = net ? [...players.keys()].sort() : [myId];
+  cells.forEach((c, i) => {
+    c.owner = ids[i % ids.length] || myId;
+    const q = players.get(c.owner); c.color = q ? q.color : null;
+  });
+  return cells;
+}
+// Fait tourner les téléchargements : mes secteurs d'abord, puis ceux des autres (avec attente).
+async function runCells(cells, nWorkers, onCell, ctl) {
+  assignCells(cells);
+  const mine = cells.filter((c) => c.owner === myId), others = cells.filter((c) => c.owner !== myId);
+  for (const c of others) if (c.st === "wait") c.st = "share";
+  let iM = 0, iO = 0;
   const worker = async (w) => {
-    while (next < cells.length && !aborted) {
-      const c = cells[next++]; c.st = "load"; onCell(c);
+    while (!ctl.stop()) {
+      let c, wait;
+      if (iM < mine.length) { c = mine[iM++]; wait = 0; c.st = "load"; }
+      else if (iO < others.length) { c = others[iO++]; wait = STEAL_WAIT; if (c.st !== "done") c.st = "share"; }
+      else break;
+      onCell(c);
       try {
-        const data = await Promise.race([getCell(c, w), abortP]);
-        for (const el of data.elements) (el.type === "node" ? nodes : ways).set(el.id, el);
+        const data = await Promise.race([getCell(c, w, wait, (x) => { x.st = "load"; onCell(x); }), ctl.abortP]);
         c.st = "done"; c.data = data; onCell(c);
       } catch (err) { if (err.name !== "AbortError") { c.st = "fail"; onCell(c); } throw err; }
     }
   };
-  try { await Promise.all(Array.from({ length: Math.min(workers, cells.length) }, (_, w) => worker(w))); }
+  await Promise.all(Array.from({ length: Math.min(nWorkers, cells.length) }, (_, w) => worker(w)));
+}
+// Un secteur reçu d'un autre joueur s'affiche tout de suite comme chargé
+function markArrived(key) {
+  if (loading) for (const c of loading.cells) if (c.key === key && c.st !== "done") { c.st = "done"; c.shared = true; onCell(c); }
+  if (prefetchCells) for (const c of prefetchCells) if (c.key === key && c.st !== "done") { c.st = "done"; c.shared = true; }
+}
+async function fetchRoads(cells, onCell, workers = 4) {
+  let aborted = false, fire; const abortP = new Promise((_, rej) => { fire = () => rej(abortErr()); }); abortP.catch(() => {});
+  loadCtl = { abort() { if (!aborted) { aborted = true; fire(); } } };
+  try { await runCells(cells, workers, onCell, { stop: () => aborted, abortP }); }
   catch (err) { loadCtl.abort(); throw err; }
+  const nodes = new Map(), ways = new Map();
+  for (const c of cells) { const d = memCells.get(c.key) || c.data; if (d) for (const el of d.elements) (el.type === "node" ? nodes : ways).set(el.id, el); }
   // ordre stable : mêmes données => même graphe chez tous les joueurs
   const byId = (a, b) => a.id - b.id;
   return { elements: [...[...nodes.values()].sort(byId), ...[...ways.values()].sort(byId)] };
 }
 
 /* ---------- Préchargement : dès que la zone est choisie, les rues se téléchargent en arrière-plan ---------- */
-let prefetchTimer = 0, prefetchTok = 0;
+let prefetchTimer = 0, prefetchTok = 0, prefetchCells = null;
 function schedulePrefetch() {
   clearTimeout(prefetchTimer);
   const z = zone; const tok = ++prefetchTok;
   if (!z || z.fake) { $("hostPrefetch").textContent = ""; $("guestPrefetch").textContent = ""; return; }
   prefetchTimer = setTimeout(async () => {
-    const cells = makeCells(z.lat, z.lon, z.r);
+    const cells = makeCells(z.lat, z.lon, z.r); prefetchCells = cells;
     const show = () => {
       if (tok !== prefetchTok || state !== "lobby") return;
       const done = cells.filter((c) => c.st === "done").length;
+      const mineN = cells.filter((c) => c.owner === myId).length, mineDone = cells.filter((c) => c.owner === myId && c.st === "done").length;
       const t = done === cells.length ? `Rues de la zone déjà téléchargées (${done} / ${cells.length} secteurs) : le chargement sera immédiat.`
-        : `Préchargement des rues en arrière-plan : ${done} / ${cells.length} secteurs`;
+        : `Préchargement des rues : ${done} / ${cells.length} secteurs${net && players.size > 1 ? ` (ta part : ${mineDone} / ${mineN})` : ""}`;
       $("hostPrefetch").textContent = t; $("guestPrefetch").textContent = t;
     };
+    const ctl = { stop: () => tok !== prefetchTok || state !== "lobby", abortP: new Promise(() => {}) };
     show();
-    let next = 0;
-    const worker = async (w) => {
-      while (next < cells.length && tok === prefetchTok && state === "lobby") {
-        const c = cells[next++];
-        try { await getCell(c, w); c.st = "done"; } catch { c.st = "fail"; }
-        show();
-      }
-    };
-    await Promise.all([worker(0), worker(1), worker(2)]);
+    try { await runCells(cells, 3, show, ctl); } catch {}
+    show();
   }, 1200); // on attend que l'hôte arrête de bouger le point
 }
 let loadCtl = null, loading = null;
@@ -1842,17 +1876,24 @@ function onCell(c) {
   const shared = loading.cells.filter((x) => x.st === "done" && x.shared).length;
   const cached = loading.cells.filter((x) => x.st === "done" && x.cached && !x.shared).length;
   const bits = [];
+  if (net && players.size > 1) {
+    const mine = loading.cells.filter((x) => x.owner === myId);
+    bits.push(`ta part : ${mine.filter((x) => x.st === "done").length} / ${mine.length}`);
+    const stolen = loading.cells.filter((x) => x.stolen && x.owner !== myId).length;
+    if (stolen) bits.push(`${stolen} repris aux joueurs lents`);
+  }
   if (shared) bits.push(`${shared} reçu${shared > 1 ? "s" : ""} des autres joueurs`);
   if (cached) bits.push(`${cached} repris du cache`);
   if (c.server && !c.shared) bits.push(`serveur ${c.server}`);
   $("lHint").textContent = bits.length ? bits.join(" · ") : "Connexion aux serveurs OpenStreetMap…";
   reportProgress(done, N, false);
-  if (c.st === "done" && c.data) {
-    const pts = new Map(); for (const el of c.data.elements) if (el.type === "node") pts.set(el.id, [el.lat, el.lon]);
+  const data = c.data || memCells.get(c.key);
+  if (c.st === "done" && data && !c.drawn) {
+    c.drawn = true; // aperçu immédiat des rues du secteur
+    const pts = new Map(); for (const el of data.elements) if (el.type === "node") pts.set(el.id, [el.lat, el.lon]);
     const lines = [];
-    for (const el of c.data.elements) if (el.type === "way") { const l = el.nodes.map((id) => pts.get(id)).filter(Boolean); if (l.length > 1) lines.push(l); }
+    for (const el of data.elements) if (el.type === "way") { const l = el.nodes.map((id) => pts.get(id)).filter(Boolean); if (l.length > 1) lines.push(l); }
     if (lines.length) loading.preview.addLayer(L.polyline(lines, { color: css("--sodium"), opacity: 0.35, weight: 1.5, interactive: false }));
-    c.data = null;
   }
 }
 function hideLoader() {
