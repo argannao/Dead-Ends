@@ -39,7 +39,7 @@ button, input { font: inherit; color: inherit; }
 #map { position: absolute; inset: 0; background: var(--night); }
 #map.drawing, #map.drawing .leaflet-interactive { cursor: crosshair !important; }
 .leaflet-container { background: var(--night); font-family: var(--f-body); }
-.leaflet-control-attribution { background: rgba(11,15,20,.75) !important; color: var(--muted) !important; font-size: 10px; }
+.leaflet-control-attribution {background: rgba(11,15,20,.75) !important; color: var(--muted) !important; font-size: 10px; }
 .leaflet-control-attribution a { color: var(--muted) !important; }
 .leaflet-bar a { background: var(--panel); color: var(--ink); border-bottom-color: var(--line); }
 .leaflet-bar a:hover { background: #1a2230; color: var(--ink); }
@@ -91,6 +91,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .status { font-size: 13px; color: var(--muted); min-height: 1.4em; }
 .status.err { color: #ff9b9e; }
 .status.good { color: var(--ok); }
+.note { margin: 0; font-size: 14px; color: var(--ink); }
+.fine { margin: 0; font-size: 12px; color: var(--muted); }
+.getkey { color: var(--sodium); font: 600 15px/1.2 var(--f-label); text-transform: uppercase; letter-spacing: .06em; text-decoration: none; }
+.getkey:hover { text-decoration: underline; }
+.keyline { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.link { background: none; border: 0; padding: 2px 0; color: var(--sodium); font-size: 12px; text-decoration: underline; }
+.link:hover:not(:disabled) { background: none; }
 
 .roles { display: flex; flex-direction: column; gap: 8px; }
 .role {
@@ -193,7 +200,20 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     <p id="tagline">Choisis où l'infection commence. Tout le monde part de là, et les zombies aussi.</p>
   </div>
 
-  <div class="step" id="stepPlace">
+  <div class="step" id="stepKey" hidden>
+    <span class="eyebrow">0 · Ta clé de carte</span>
+    <p class="note">Le fond de carte vient de CARTO, qui demande une clé gratuite à chaque joueur. Pas de compte à créer : entre ton e-mail sur leur site, tu reçois la clé en une minute.</p>
+    <a class="getkey" href="https://dashboard.basemaps.carto.com" target="_blank" rel="noopener">Obtenir ma clé gratuite ↗</a>
+    <form class="row" id="keyForm">
+      <input type="text" id="keyInput" placeholder="Colle ta clé ici" autocomplete="off" spellcheck="false">
+      <button type="submit">Valider</button>
+    </form>
+    <div class="status" id="keyStatus"></div>
+    <p class="fine">La clé reste dans ton navigateur. Elle n'est envoyée qu'à CARTO pour afficher la carte.</p>
+  </div>
+
+  <div class="step" id="stepPlace" hidden>
+    <div class="keyline"><span class="coords" id="keyInfo"></span><button type="button" class="link" id="changeKeyBtn">Changer de clé</button></div>
     <span class="eyebrow">1 · Le point de départ</span>
     <form class="row" id="searchForm">
       <input type="text" id="searchInput" placeholder="Une adresse, une ville…" autocomplete="off">
@@ -310,16 +330,28 @@ const hyp = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 /* ---------------- Carte ---------------- */
 const map = L.map("map", { zoomControl: true, boxZoom: false, preferCanvas: true, worldCopyJump: true })
   .setView([46.6, 2.4], 6);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-  subdomains: "abcd", maxZoom: 19,
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-}).addTo(map);
+// Fond de carte CARTO : chaque joueur utilise sa propre clé (gratuite), gardée dans son navigateur.
+const KEY_STORE = "pointzero.cartoKey";
+let cartoKey = ""; try { cartoKey = localStorage.getItem(KEY_STORE) || ""; } catch {}
+let baseLayer = null, tileOk = 0, tileErr = 0;
+function setBaseMap(key) {
+  if (baseLayer) baseLayer.remove();
+  tileOk = 0; tileErr = 0;
+  baseLayer = L.tileLayer(`https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${encodeURIComponent(key)}`, {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  }).addTo(map);
+  baseLayer.on("tileload", () => tileOk++);
+  baseLayer.on("tileerror", () => {
+    if (++tileErr >= 4 && tileOk === 0) keyStatus("La carte ne se charge pas avec cette clé. Vérifie-la ou change-la.", "err");
+  });
+}
 map.zoomControl.setPosition("topright");
 
 let pickMarker = null, zoneCircle = null, roadsLayer = null;
 let picked = null;          // {lat, lon}
 let G = null;               // graphe routier
-let state = "pick";         // pick | role | countdown | play | over
+let state = "key";          // key | pick | role | countdown | play | over
 
 /* ---------------- Tas binaire (Dijkstra / A*) ---------------- */
 class Heap {
@@ -799,7 +831,7 @@ sb.addEventListener("pointerdown", (e) => { e.preventDefault(); if (game) game.s
 
 /* ---------------- Préparation ---------------- */
 function showStep(id) {
-  for (const s of ["stepPlace", "stepRole", "stepOver"]) $(s).hidden = s !== id;
+  for (const s of ["stepKey", "stepPlace", "stepRole", "stepOver"]) $(s).hidden = s !== id;
   $("tagline").hidden = id === "stepOver";
 }
 function radius() { return +document.querySelector('input[name="radius"]:checked').value; }
@@ -939,6 +971,28 @@ function backToPick() {
 $("backBtn").addEventListener("click", backToPick);
 $("elsewhereBtn").addEventListener("click", backToPick);
 document.fonts && document.fonts.ready.then(readColors);
+
+/* ---------------- Clé CARTO ---------------- */
+function keyStatus(t, cls) { const s = $("keyStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); if (state === "pick" && cls === "err") askKey(); }
+function maskKey(k) { return k.length > 6 ? "••••" + k.slice(-4) : "••••"; }
+function askKey() {
+  state = "key"; showStep("stepKey"); $("keyInput").value = cartoKey; $("keyInput").focus();
+}
+function acceptKey(k) {
+  cartoKey = k; try { localStorage.setItem(KEY_STORE, k); } catch {}
+  setBaseMap(k);
+  $("keyInfo").innerHTML = `Clé CARTO : <b>${maskKey(k)}</b>`;
+  keyStatus("");
+  state = "pick"; showStep("stepPlace");
+}
+$("keyForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const k = $("keyInput").value.trim();
+  if (k.length < 8 || /\s/.test(k)) { keyStatus("Cette clé semble incomplète. Copie-la en entier depuis le site de CARTO.", "err"); return; }
+  acceptKey(k);
+});
+$("changeKeyBtn").addEventListener("click", askKey);
+if (cartoKey) acceptKey(cartoKey); else askKey();
 
 // Accès pour le débogage depuis la console
 window.PZ = { get G() { return G; }, get game() { return game; }, get state() { return state; }, CFG, ROLES, route, snap, computeField, followDrawn, toLL };
