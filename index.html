@@ -343,6 +343,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 const CFG = {
   zombieDelay: 15,      // s avant la première vague
   waveEvery: 20,        // s entre deux vagues
+  waveWarn: 5,          // s d'alerte avant une vague qui sort ailleurs
+  spawnMin: 300,        // m : distance minimale (par les rues) entre toi et un point d'apparition
+  spawnMax: 1100,       // m : distance maximale
+  splitFrom: 4,         // à partir de cette vague, les zombies sortent de 2 points
   waveBase: 3,          // zombies dans la vague 1
   waveInc: 2,           // zombies en plus à chaque vague
   zSpeed: 4.2,          // m/s, vague 1
@@ -601,12 +605,14 @@ function newGame(roleKey) {
     role: roleKey, R: r, t: 0, phase: "countdown",
     player: { x: G.X[s], y: G.Y[s], a: s, b: s, route: [], trail: 0, dir: 0, stamina: r.stamina },
     zombies: [], wave: 0, nextWave: CFG.zombieDelay, pending: [], fieldT: 0, sprint: false, lastBanner: "",
+    upcoming: null,   // prochaine vague annoncée : {at, nodes}
+    nests: [],        // anciens points d'apparition
+
   };
   computeField(game.player);
 }
 function waveSpeed(k) { return Math.min(CFG.zSpeedMax, CFG.zSpeed + CFG.zSpeedInc * (k - 1)); }
-function spawnZombie(k) {
-  const s = G.spawn;
+function spawnZombie(k, s) {
   const ang = Math.random() * Math.PI * 2;
   game.zombies.push({
     x: G.X[s], y: G.Y[s], a: s, b: s, route: [],
@@ -614,6 +620,29 @@ function spawnZombie(k) {
     ox: Math.cos(ang) * 3, oy: Math.sin(ang) * 3, // léger décalage visuel pour ne pas tous se superposer
     wob: Math.random() * 10,
   });
+}
+// Points d'apparition : carrefours au hasard, ni trop près ni trop loin de toi par les rues
+function pickSpawnNodes(count) {
+  const out = [];
+  const ok = (n, min, max) => {
+    const d = G.dist[n]; if (!(d >= min && d <= max)) return false;
+    return out.every((m) => hyp(G.X[n], G.Y[n], G.X[m], G.Y[m]) > 250);
+  };
+  for (const [min, max] of [[CFG.spawnMin, CFG.spawnMax], [CFG.spawnMin * 0.6, CFG.spawnMax * 2], [120, Infinity]]) {
+    for (let tries = 0; tries < 400 && out.length < count; tries++) {
+      const n = (Math.random() * G.N) | 0;
+      if (ok(n, min, max)) out.push(n);
+    }
+    if (out.length >= count) break;
+  }
+  return out.length ? out : [G.spawn];
+}
+// « au nord-est, à 420 m » (distance à vol d'oiseau depuis le joueur)
+function where(n) {
+  const P = game.player; const dx = G.X[n] - P.x, dy = G.Y[n] - P.y;
+  const dirs = ["à l'est", "au nord-est", "au nord", "au nord-ouest", "à l'ouest", "au sud-ouest", "au sud", "au sud-est"];
+  const i = ((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8;
+  return `${dirs[i]}, à ${Math.round(Math.hypot(dx, dy) / 10) * 10} m`;
 }
 function zombieThink(z) {
   const P = game.player;
@@ -634,15 +663,24 @@ function zombieThink(z) {
 function update(dt) {
   const gm = game; const P = gm.player;
   gm.t += dt;
-  // Vagues
+  // Vagues : la 1re sort du point zéro, les suivantes d'endroits aléatoires annoncés quelques secondes avant
+  if (!gm.upcoming && gm.t >= gm.nextWave - CFG.waveWarn) {
+    const k = gm.wave + 1;
+    const nodes = k === 1 ? [G.spawn] : pickSpawnNodes(k >= CFG.splitFrom ? 2 : 1);
+    gm.upcoming = { at: gm.nextWave, nodes };
+    if (k > 1) banner(`Vague ${k} dans ${CFG.waveWarn} s · ${nodes.map(where).join(" et ")}`, true, 3500);
+  }
   if (gm.t >= gm.nextWave) {
     gm.wave++; const n = CFG.waveBase + CFG.waveInc * (gm.wave - 1);
-    for (let i = 0; i < n; i++) gm.pending.push(gm.t + i * 0.35);
+    const nodes = gm.upcoming ? gm.upcoming.nodes : [G.spawn];
+    for (let i = 0; i < n; i++) gm.pending.push({ t: gm.t + Math.floor(i / nodes.length) * 0.35, node: nodes[i % nodes.length] });
+    for (const nd of nodes) if (nd !== G.spawn) gm.nests.push(nd);
+    gm.upcoming = null;
     gm.nextWave += CFG.waveEvery;
     banner(gm.wave === 1 ? "Ils sortent du point zéro" : `Vague ${gm.wave} · ${n} zombies`, true, 2600);
     flash();
   }
-  while (gm.pending.length && gm.pending[0] <= gm.t) { gm.pending.shift(); spawnZombie(gm.wave); }
+  while (gm.pending.length && gm.pending[0].t <= gm.t) { const p = gm.pending.shift(); spawnZombie(gm.wave, p.node); }
   if (gm.wave === 0) {
     const left = Math.ceil(gm.nextWave - gm.t);
     const txt = `Les zombies sortent dans ${left} s`;
@@ -748,6 +786,35 @@ function render(now) {
     ctx.beginPath();
     drawPts.forEach((ll, i) => { const q = map.latLngToContainerPoint(ll); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); });
     ctx.stroke();
+  }
+  // anciens nids
+  for (const nd of game.nests) {
+    const q = px(G.X[nd], G.Y[nd]);
+    ctx.strokeStyle = "rgba(229,72,77,0.45)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(q.x - 6, q.y - 6); ctx.lineTo(q.x + 6, q.y + 6); ctx.moveTo(q.x + 6, q.y - 6); ctx.lineTo(q.x - 6, q.y + 6); ctx.stroke();
+  }
+  // vague annoncée : cercle qui se resserre + compte à rebours, flèche au bord si hors écran
+  if (game.upcoming && game.wave > 0) {
+    const left = Math.max(0, game.upcoming.at - game.t);
+    for (const nd of game.upcoming.nodes) {
+      const q = px(G.X[nd], G.Y[nd]);
+      const k = left / CFG.waveWarn;
+      ctx.strokeStyle = COL.blood; ctx.lineWidth = 3; ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(q.x, q.y, 12 + 40 * k, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1; ctx.fillStyle = COL.blood; ctx.beginPath(); ctx.arc(q.x, q.y, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.font = "700 14px 'JetBrains Mono', monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#fff";
+      ctx.fillText(String(Math.ceil(left)), q.x, q.y - 20 - 40 * k);
+      const mx = 40, my = 100; // marges : on évite le HUD en haut et la barre d'endurance en bas
+      if (q.x < mx || q.y < my || q.x > W - mx || q.y > Hh - my) {
+        const cx = W / 2, cy = Hh / 2, dx = q.x - cx, dy = q.y - cy;
+        const t = Math.min((W / 2 - mx) / Math.abs(dx || 1e-6), (Hh / 2 - my) / Math.abs(dy || 1e-6));
+        const ex = cx + dx * t, ey = cy + dy * t, ang = Math.atan2(dy, dx);
+        ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang);
+        ctx.fillStyle = COL.blood; ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-8, -10); ctx.lineTo(-8, 10); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        ctx.fillStyle = "#fff"; ctx.fillText(String(Math.ceil(left)), ex - Math.cos(ang) * 22, ey - Math.sin(ang) * 22 + 5);
+      }
+    }
   }
   // zombies (seulement dans le champ de vision)
   const vm = game.R.vision; const zr = Math.max(4, Math.min(8, metersToPx(4)));
