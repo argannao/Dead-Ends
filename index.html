@@ -98,6 +98,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .keyline { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .link { background: none; border: 0; padding: 2px 0; color: var(--sodium); font-size: 12px; text-decoration: underline; }
 .link:hover:not(:disabled) { background: none; }
+.guide { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.guide li::marker { color: var(--sodium); font: 700 14px var(--f-mono); }
+.answers { margin: 8px 0 0; display: flex; flex-direction: column; gap: 3px; }
+.answers dt { font: 600 11px/1.3 var(--f-label); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-top: 5px; }
+.answers dd { margin: 0; font-size: 13px; }
+.copyrow { display: flex; gap: 6px; align-items: flex-start; }
+.copyrow code { flex: 1; min-width: 0; font: 500 11.5px/1.45 var(--f-mono); background: var(--night); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; overflow-wrap: anywhere; user-select: all; }
+.copy { padding: 6px 9px; font-size: 12px; flex: none; }
+.copy.done { color: var(--ok); border-color: var(--ok); }
 
 .roles { display: flex; flex-direction: column; gap: 8px; }
 .role {
@@ -202,10 +211,26 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
   <div class="step" id="stepKey" hidden>
     <span class="eyebrow">0 · Ta clé de carte</span>
-    <p class="note">Le fond de carte vient de CARTO, qui demande une clé gratuite à chaque joueur. Pas de compte à créer : entre ton e-mail sur leur site, tu reçois la clé en une minute.</p>
-    <a class="getkey" href="https://dashboard.basemaps.carto.com" target="_blank" rel="noopener">Obtenir ma clé gratuite ↗</a>
+    <p class="note">Le fond de carte vient de CARTO, qui demande une clé gratuite à chaque joueur. Ça prend deux minutes, et tu ne le fais qu'une fois.</p>
+    <ol class="guide">
+      <li><a class="getkey" href="https://dashboard.basemaps.carto.com" target="_blank" rel="noopener">Ouvre le formulaire CARTO ↗</a></li>
+      <li>Remplis-le avec ces réponses :
+        <dl class="answers">
+          <dt>Email address</dt><dd>ton adresse e-mail (la clé y sera envoyée)</dd>
+          <dt>Your name</dt><dd>ton pseudo suffit</dd>
+          <dt>Commercial project?</dt><dd><b>No</b></dd>
+          <dt>What are you building?</dt>
+          <dd class="copyrow"><code id="buildText">Non-commercial hobby browser game "Point Zero": a 2D zombie escape game played on real streets, needs a dark basemap.</code><button type="button" class="copy" data-copy="buildText">Copier</button></dd>
+          <dt id="refLabel">Restrict to specific websites <span class="fine">(conseillé)</span></dt>
+          <dd class="copyrow" id="refRow"><code id="refText"></code><button type="button" class="copy" data-copy="refText">Copier</button></dd>
+          <dt>Ensuite</dt><dd>coche les conditions d'utilisation, le reCAPTCHA, puis <b>Request API key</b></dd>
+        </dl>
+      </li>
+      <li>Ouvre l'e-mail de CARTO, copie ta clé et colle-la ici :</li>
+    </ol>
     <form class="row" id="keyForm">
       <input type="text" id="keyInput" placeholder="Colle ta clé ici" autocomplete="off" spellcheck="false">
+      <button type="button" id="pasteBtn">Coller</button>
       <button type="submit">Valider</button>
     </form>
     <div class="status" id="keyStatus"></div>
@@ -992,6 +1017,19 @@ $("keyForm").addEventListener("submit", (e) => {
   acceptKey(k);
 });
 $("changeKeyBtn").addEventListener("click", askKey);
+// Guide : texte à copier, domaine du site pour la restriction, bouton Coller
+if (/^https?:$/.test(location.protocol) && location.hostname) {
+  $("refText").textContent = location.hostname;
+} else { $("refLabel").hidden = true; $("refRow").hidden = true; }
+document.querySelectorAll(".copy").forEach((btn) => btn.addEventListener("click", async () => {
+  const el = $(btn.dataset.copy); const txt = el.textContent;
+  try { await navigator.clipboard.writeText(txt); btn.textContent = "Copié"; btn.classList.add("done"); setTimeout(() => { btn.textContent = "Copier"; btn.classList.remove("done"); }, 1500); }
+  catch { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+}));
+$("pasteBtn").addEventListener("click", async () => {
+  try { const t = (await navigator.clipboard.readText()).trim(); if (t) { $("keyInput").value = t; keyStatus(""); } }
+  catch { $("keyInput").focus(); keyStatus("Ton navigateur bloque le collage automatique : fais Ctrl+V dans le champ.", "err"); }
+});
 if (cartoKey) acceptKey(cartoKey); else askKey();
 
 // Accès pour le débogage depuis la console
