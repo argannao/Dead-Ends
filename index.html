@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Point Zéro</title>
+<title>Dead Ends</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -205,7 +205,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 <!-- Panneau : choix du lieu, du rôle, puis résultats -->
 <section id="panel" aria-live="polite">
   <div class="brand">
-    <h1>Point Zéro</h1>
+    <h1>Dead Ends</h1>
     <p id="tagline">Choisis où l'infection commence. Tout le monde part de là, et les zombies aussi.</p>
   </div>
 
@@ -220,7 +220,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
           <dt>Your name</dt><dd>ton pseudo suffit</dd>
           <dt>Commercial project?</dt><dd><b>No</b></dd>
           <dt>What are you building?</dt>
-          <dd class="copyrow"><code id="buildText">Non-commercial hobby browser game "Point Zero": a 2D zombie escape game played on real streets, needs a dark basemap.</code><button type="button" class="copy" data-copy="buildText">Copier</button></dd>
+          <dd class="copyrow"><code id="buildText">Non-commercial hobby browser game "Dead Ends": a 2D zombie escape game played on real streets, needs a dark basemap.</code><button type="button" class="copy" data-copy="buildText">Copier</button></dd>
           <dt id="refLabel">Restrict to specific websites <span class="fine">(conseillé)</span></dt>
           <dd class="copyrow" id="refRow"><code id="refText"></code><button type="button" class="copy" data-copy="refText">Copier</button></dd>
           <dt>Ensuite</dt><dd>coche les conditions d'utilisation, le reCAPTCHA, puis <b>Request API key</b></dd>
@@ -314,7 +314,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 <script>
 "use strict";
 /* =====================================================================
-   POINT ZÉRO — prototype solo
+   DEAD ENDS — prototype solo
    Carte : OpenStreetMap (tuiles CARTO), réseau routier via Overpass.
    ===================================================================== */
 
@@ -356,8 +356,8 @@ const hyp = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 const map = L.map("map", { zoomControl: true, boxZoom: false, preferCanvas: true, worldCopyJump: true })
   .setView([46.6, 2.4], 6);
 // Fond de carte CARTO : chaque joueur utilise sa propre clé (gratuite), gardée dans son navigateur.
-const KEY_STORE = "pointzero.cartoKey";
-let cartoKey = ""; try { cartoKey = localStorage.getItem(KEY_STORE) || ""; } catch {}
+const KEY_STORE = "deadends.cartoKey";
+let cartoKey = ""; try { cartoKey = localStorage.getItem(KEY_STORE) || localStorage.getItem("pointzero.cartoKey") || ""; } catch {}
 let baseLayer = null, tileOk = 0, tileErr = 0;
 function setBaseMap(key) {
   if (baseLayer) baseLayer.remove();
@@ -979,9 +979,9 @@ function gameOver() {
   $("banner").hidden = true; $("threat").hidden = true; $("hud").hidden = true;
   $("rTime").textContent = fmtTime(game.t); $("rDist").textContent = fmtDist(game.player.trail);
   $("rWave").textContent = String(game.wave); $("rZomb").textContent = String(game.zombies.length);
-  let best = 0; try { best = +localStorage.getItem("pointzero.best") || 0; } catch {}
+  let best = 0; try { best = +localStorage.getItem("deadends.best") || 0; } catch {}
   const rb = $("rBest");
-  if (game.t > best) { try { localStorage.setItem("pointzero.best", String(game.t)); } catch {} rb.textContent = "Nouveau record de survie."; rb.className = "best new"; }
+  if (game.t > best) { try { localStorage.setItem("deadends.best", String(game.t)); } catch {} rb.textContent = "Nouveau record de survie."; rb.className = "best new"; }
   else { rb.textContent = `Record : ${fmtTime(best)}`; rb.className = "best"; }
   $("panel").hidden = false; showStep("stepOver");
 }
