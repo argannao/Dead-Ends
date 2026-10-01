@@ -107,6 +107,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .copyrow code { flex: 1; min-width: 0; font: 500 11.5px/1.45 var(--f-mono); background: var(--night); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; overflow-wrap: anywhere; user-select: all; }
 .copy { padding: 6px 9px; font-size: 12px; flex: none; }
 .copy.done { color: var(--ok); border-color: var(--ok); }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; cursor: pointer; }
+.check input { accent-color: var(--sodium); margin-top: 3px; }
 .loader { display: flex; flex-direction: column; gap: 7px; }
 .lsegs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 .lseg { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; position: relative; }
@@ -265,6 +267,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
       <label><input type="radio" name="radius" id="r1500" value="1500" checked><span class="t">Ville</span><span class="d">r = 1,5 km</span></label>
       <label><input type="radio" name="radius" id="r2500" value="2500"><span class="t">Large</span><span class="d">r = 2,5 km</span></label>
     </div>
+    <label class="check"><input type="checkbox" id="withPaths" checked> <span>Inclure les chemins piétons et allées <span class="fine">(sentiers, passages, parkings)</span></span></label>
     <button class="primary" id="loadBtn" disabled>Charger les rues</button>
     <div class="loader" id="loader" hidden role="status">
       <div class="lsegs" aria-hidden="true"><span class="lseg"></span><span class="lseg"></span><span class="lseg"></span></div>
@@ -426,7 +429,9 @@ class Heap {
 }
 
 /* ---------------- Graphe routier ---------------- */
-function buildGraph(data, lat0, lon0) {
+const MINOR = /^(footway|path|cycleway|steps|track|pedestrian|bridleway|corridor)$/;
+function isMinor(t) { return !!t && (MINOR.test(t.highway || "") || t.service === "parking_aisle" || t.footway === "sidewalk"); }
+function buildGraph(data, lat0, lon0, withPaths = true) {
   const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110574;
   const idOf = new Map(); const xs = [], ys = [];
   for (const el of data.elements) if (el.type === "node") { idOf.set(el.id, xs.length); xs.push((el.lon - lon0) * kx); ys.push((el.lat - lat0) * ky); }
@@ -434,17 +439,19 @@ function buildGraph(data, lat0, lon0) {
   const seen = new Set(); const rawWays = [];
   for (const el of data.elements) {
     if (el.type !== "way" || !el.nodes) continue;
+    const minor = isMinor(el.tags);
+    if (minor && !withPaths) continue;
     const w = [];
     for (let i = 0; i < el.nodes.length; i++) {
       const a = idOf.get(el.nodes[i]);
-      if (a === undefined) { if (w.length > 1) rawWays.push(w.slice()); w.length = 0; continue; }
+      if (a === undefined) { if (w.length > 1) rawWays.push({ nodes: w.slice(), minor }); w.length = 0; continue; }
       if (w.length) {
         const b = w[w.length - 1];
         if (a !== b) { const key = a < b ? a + "_" + b : b + "_" + a; if (!seen.has(key)) { seen.add(key); nb[a].push(b); nb[b].push(a); } }
       }
       w.push(a);
     }
-    if (w.length > 1) rawWays.push(w);
+    if (w.length > 1) rawWays.push({ nodes: w, minor });
   }
   if (!xs.length) return null;
   // Plus grande composante accessible depuis le nœud le plus proche du point choisi
@@ -467,10 +474,11 @@ function buildGraph(data, lat0, lon0) {
   });
   // Tracés à afficher (seulement la composante jouable)
   const ways = [];
-  for (const w of rawWays) {
+  for (const rw of rawWays) {
     let cur = [];
-    for (const o of w) { const j = newId[o]; if (j < 0) { if (cur.length > 1) ways.push(cur); cur = []; } else cur.push(j); }
-    if (cur.length > 1) ways.push(cur);
+    const push = () => { if (cur.length > 1) ways.push({ nodes: cur, minor: rw.minor }); };
+    for (const o of rw.nodes) { const j = newId[o]; if (j < 0) { push(); cur = []; } else cur.push(j); }
+    push();
   }
   const g = { N, X, Y, adjStart: deg, adjTo, adjLen, EA: Int32Array.from(EA), EB: Int32Array.from(EB), ways, lat0, lon0, kx, ky, spawn: 0 };
   buildGrid(g);
@@ -993,7 +1001,7 @@ $("searchForm").addEventListener("submit", async (e) => {
 function status(t, cls) { const s = $("loadStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); }
 
 async function fetchRoads(lat, lon, r, onProgress) {
-  const q = `[out:json][timeout:60];way["highway"~"^(${HIGHWAYS})$"]["access"!~"^(private|no)$"]["area"!="yes"](around:${r},${lat},${lon});(._;>;);out skel qt;`;
+  const q = `[out:json][timeout:60];way["highway"~"^(${HIGHWAYS})$"]["access"!~"^(private|no)$"]["area"!="yes"](around:${r},${lat},${lon});out body qt;>;out skel qt;`;
   const host = (u) => new URL(u).hostname;
   // On interroge le premier serveur ; s'il n'a pas commencé à répondre au bout de 8 s,
   // on lance aussi le suivant. Le premier qui répond gagne, les autres sont annulés.
@@ -1085,12 +1093,16 @@ $("fakeBtn").addEventListener("click", () => {
   useGraph(fakeCity(picked.lat, picked.lon, radius()), true);
 });
 function useGraph(data, generated) {
-  const g = buildGraph(data, picked.lat, picked.lon);
+  const g = buildGraph(data, picked.lat, picked.lon, $("withPaths").checked);
   if (!g || g.N < 20) { status("Pas assez de rues ici. Choisis un point plus proche d'une zone habitée.", "err"); return; }
   G = g;
   if (roadsLayer) roadsLayer.remove();
-  const lines = G.ways.map((w) => w.map((n) => toLL(G.X[n], G.Y[n])));
-  roadsLayer = L.polyline(lines, { color: css("--sodium"), opacity: generated ? 0.55 : 0.22, weight: generated ? 3 : 2, interactive: false }).addTo(map);
+  // Le réseau jouable est dessiné par-dessus la carte : rues en trait plein, chemins piétons et allées en pointillés.
+  const toLine = (w) => w.nodes.map((n) => toLL(G.X[n], G.Y[n]));
+  roadsLayer = L.layerGroup([
+    L.polyline(G.ways.filter((w) => !w.minor).map(toLine), { color: css("--sodium"), opacity: generated ? 0.55 : 0.45, weight: generated ? 3 : 2.5, interactive: false }),
+    L.polyline(G.ways.filter((w) => w.minor).map(toLine), { color: css("--sodium"), opacity: 0.6, weight: 1.6, dashArray: "3 5", interactive: false }),
+  ]).addTo(map);
   if (pickMarker) { pickMarker.remove(); pickMarker = null; }
   const total = G.EA.length;
   status(`${G.N.toLocaleString("fr-FR")} carrefours et ${total.toLocaleString("fr-FR")} tronçons chargés${generated ? " (ville générée)" : ""}.`, "good");
