@@ -107,6 +107,20 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .copyrow code { flex: 1; min-width: 0; font: 500 11.5px/1.45 var(--f-mono); background: var(--night); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; overflow-wrap: anywhere; user-select: all; }
 .copy { padding: 6px 9px; font-size: 12px; flex: none; }
 .copy.done { color: var(--ok); border-color: var(--ok); }
+.loader { display: flex; flex-direction: column; gap: 7px; }
+.lsegs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.lseg { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; position: relative; }
+.lseg.full { background: var(--sodium); }
+.lseg.active::after {
+  content: ""; position: absolute; inset: 0; width: 45%; border-radius: 3px; background: var(--sodium);
+  animation: slide 1.1s ease-in-out infinite;
+}
+@keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(230%); } }
+.lsteps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; font: 600 10.5px/1 var(--f-label); text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.lrow { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; }
+.lrow .coords { color: var(--ink); }
+.fine.slow { color: #e2b77a; }
+@media (prefers-reduced-motion: reduce) { .lseg.active::after { animation: none; width: 100%; opacity: .5; } }
 
 .roles { display: flex; flex-direction: column; gap: 8px; }
 .role {
@@ -252,6 +266,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
       <label><input type="radio" name="radius" id="r2500" value="2500"><span class="t">Large</span><span class="d">r = 2,5 km</span></label>
     </div>
     <button class="primary" id="loadBtn" disabled>Charger les rues</button>
+    <div class="loader" id="loader" hidden role="status">
+      <div class="lsegs" aria-hidden="true"><span class="lseg"></span><span class="lseg"></span><span class="lseg"></span></div>
+      <div class="lsteps" aria-hidden="true"><span>Serveur</span><span>Réception</span><span>Réseau</span></div>
+      <div class="lrow"><span id="lPhase">Le serveur prépare les rues…</span><span class="coords" id="lTime">0 s</span></div>
+      <div class="fine" id="lHint"></div>
+      <div class="fine slow" id="lSlow" hidden>Les serveurs OpenStreetMap sont parfois chargés. Une zone plus petite (Quartier) se charge beaucoup plus vite.</div>
+      <button type="button" class="ghost" id="cancelBtn">Annuler</button>
+    </div>
     <div class="status" id="loadStatus"></div>
     <button class="ghost" id="fakeBtn" hidden>Jouer sur une ville générée</button>
   </div>
@@ -668,6 +690,19 @@ let drawPts = null; // tracé en cours (Shift + glisser), en coordonnées écran
 function render(now) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, fx.width, fx.height);
+  if (loading && picked) {
+    // radar qui balaie la zone pendant le chargement
+    const c = map.latLngToContainerPoint([picked.lat, picked.lon]); const R = metersToPx(radius());
+    const a = (now / 1000) * 1.8;
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.arc(c.x, c.y, R, a - 0.9, a); ctx.closePath();
+    const g2 = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, R);
+    g2.addColorStop(0, "rgba(255,173,66,0.0)"); g2.addColorStop(1, "rgba(255,173,66,0.22)");
+    ctx.fillStyle = g2; ctx.fill();
+    ctx.strokeStyle = "rgba(255,173,66,0.8)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(c.x + Math.cos(a) * R, c.y + Math.sin(a) * R); ctx.stroke();
+    ctx.restore();
+  }
   if (!G) return;
   const W = fx.width / DPR, Hh = fx.height / DPR;
   const s = px(G.X[G.spawn], G.Y[G.spawn]);
@@ -890,32 +925,94 @@ $("searchForm").addEventListener("submit", async (e) => {
 });
 function status(t, cls) { const s = $("loadStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); }
 
-async function fetchRoads(lat, lon, r) {
-  const q = `[out:json][timeout:40];way["highway"~"^(${HIGHWAYS})$"]["access"!~"^(private|no)$"]["area"!="yes"](around:${r},${lat},${lon});(._;>;);out skel qt;`;
-  let lastErr;
-  for (const url of OVERPASS) {
-    try {
-      const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 45000);
-      const res = await fetch(url, { method: "POST", body: "data=" + encodeURIComponent(q), headers: { "Content-Type": "application/x-www-form-urlencoded" }, signal: ctl.signal });
-      clearTimeout(to);
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return await res.json();
-    } catch (err) { lastErr = err; }
-  }
-  throw lastErr;
+async function fetchRoads(lat, lon, r, onProgress) {
+  const q = `[out:json][timeout:60];way["highway"~"^(${HIGHWAYS})$"]["access"!~"^(private|no)$"]["area"!="yes"](around:${r},${lat},${lon});(._;>;);out skel qt;`;
+  const host = (u) => new URL(u).hostname;
+  // On interroge le premier serveur ; s'il n'a pas commencé à répondre au bout de 8 s,
+  // on lance aussi le suivant. Le premier qui répond gagne, les autres sont annulés.
+  return new Promise((resolve, reject) => {
+    const ctls = []; let winner = -1, nextIdx = 0, running = 0, done = false, stagger = 0, lastErr = null;
+    loadCtl = { abort() { if (done) return; done = true; clearTimeout(stagger); ctls.forEach((c) => c && c.abort()); reject(new DOMException("Annulé", "AbortError")); } };
+    const attempt = async (i) => {
+      const ctl = new AbortController(); ctls[i] = ctl;
+      const to = setTimeout(() => ctl.abort(), 70000);
+      try {
+        const res = await fetch(OVERPASS[i], { method: "POST", body: "data=" + encodeURIComponent(q), headers: { "Content-Type": "application/x-www-form-urlencoded" }, signal: ctl.signal });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        if (winner >= 0 && winner !== i) { ctl.abort(); throw new Error("perdu"); }
+        winner = i; clearTimeout(stagger); ctls.forEach((c, j) => { if (c && j !== i) c.abort(); });
+        const total = +res.headers.get("content-length") || 0;
+        onProgress({ phase: "download", server: host(OVERPASS[i]), bytes: 0, total });
+        const reader = res.body.getReader(); const chunks = []; let bytes = 0;
+        for (;;) {
+          const { done: end, value } = await reader.read(); if (end) break;
+          chunks.push(value); bytes += value.length;
+          onProgress({ phase: "download", server: host(OVERPASS[i]), bytes, total });
+        }
+        const buf = new Uint8Array(bytes); let o = 0; for (const c of chunks) { buf.set(c, o); o += c.length; }
+        return JSON.parse(new TextDecoder().decode(buf));
+      } finally { clearTimeout(to); }
+    };
+    const startNext = () => {
+      if (done || winner >= 0 || nextIdx >= OVERPASS.length) return;
+      const i = nextIdx++; running++;
+      onProgress({ phase: "wait", server: host(OVERPASS[i]), servers: nextIdx });
+      attempt(i).then(
+        (data) => { if (done) return; done = true; resolve(data); },
+        (err) => {
+          running--; if (done) return;
+          if (err.message !== "perdu") lastErr = err;
+          if (winner === i) winner = -1;
+          if (nextIdx < OVERPASS.length) { clearTimeout(stagger); startNext(); }
+          else if (running === 0) { done = true; reject(lastErr || err); }
+        });
+      if (nextIdx < OVERPASS.length) stagger = setTimeout(startNext, 8000);
+    };
+    startNext();
+  });
 }
+let loadCtl = null, loading = null; // loading : {t0, phase}
+const PHASES = ["wait", "download", "build"];
+function showLoader(p) {
+  const L0 = $("loader"); L0.hidden = false;
+  loading.phase = p.phase;
+  const idx = PHASES.indexOf(p.phase);
+  document.querySelectorAll("#loader .lseg").forEach((s, i) => { s.className = "lseg" + (i < idx ? " full" : i === idx ? " active" : ""); });
+  const mo = (b) => b < 1e6 ? `${Math.round(b / 1024)} Ko` : `${(b / 1e6).toFixed(1).replace(".", ",")} Mo`;
+  if (p.phase === "wait") { $("lPhase").textContent = "Le serveur prépare les rues…"; $("lHint").textContent = `Serveur : ${p.server}${p.servers > 1 ? ` (essai n° ${p.servers})` : ""}`; }
+  if (p.phase === "download") {
+    $("lPhase").textContent = `Réception des rues · ${mo(p.bytes)}${p.total ? ` / ${mo(p.total)}` : ""}`;
+    $("lHint").textContent = `Serveur : ${p.server}`;
+  }
+  if (p.phase === "build") { $("lPhase").textContent = "Construction du réseau de rues…"; $("lHint").textContent = ""; }
+}
+function hideLoader() { $("loader").hidden = true; clearInterval(loading && loading.timer); loading = null; }
 $("loadBtn").addEventListener("click", async () => {
-  if (!picked) return;
-  $("loadBtn").disabled = true; $("fakeBtn").hidden = true;
-  status("Téléchargement des rues depuis OpenStreetMap…");
+  if (!picked || loading) return;
+  $("loadBtn").disabled = true; $("fakeBtn").hidden = true; status("");
+  if (zoneCircle) map.fitBounds(zoneCircle.getBounds(), { paddingTopLeft: [window.innerWidth > 640 ? 400 : 0, 0] });
+  loading = { t0: performance.now(), phase: "wait" };
+  loading.timer = setInterval(() => {
+    if (!loading) return;
+    const s = (performance.now() - loading.t0) / 1000;
+    $("lTime").textContent = `${Math.floor(s)} s`;
+    if (s > 15 && loading.phase === "wait") $("lSlow").hidden = false;
+  }, 200);
+  $("lSlow").hidden = true; $("lTime").textContent = "0 s";
+  showLoader({ phase: "wait", server: "…", servers: 1 });
   try {
-    const data = await fetchRoads(picked.lat, picked.lon, radius());
+    const data = await fetchRoads(picked.lat, picked.lon, radius(), showLoader);
+    showLoader({ phase: "build" });
+    await new Promise((r) => setTimeout(r, 40)); // laisse le navigateur afficher l'étape avant le calcul
     useGraph(data, false);
+    hideLoader();
   } catch (err) {
-    status("Impossible de récupérer les rues (serveur saturé ou hors ligne). Réessaie, ou joue sur une ville générée.", "err");
-    $("fakeBtn").hidden = false;
+    hideLoader();
+    if (err && err.name === "AbortError") status("Chargement annulé.");
+    else { status("Impossible de récupérer les rues (serveurs saturés ou hors ligne). Réessaie, choisis une zone plus petite, ou joue sur une ville générée.", "err"); $("fakeBtn").hidden = false; }
   } finally { $("loadBtn").disabled = false; }
 });
+$("cancelBtn").addEventListener("click", () => { if (loadCtl) loadCtl.abort(); });
 $("fakeBtn").addEventListener("click", () => {
   if (!picked) { const c = map.getCenter(); setPick(c); }
   useGraph(fakeCity(picked.lat, picked.lon, radius()), true);
