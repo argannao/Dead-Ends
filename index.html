@@ -203,6 +203,35 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   #threat { top: auto; bottom: 156px; }
 }
 @media (prefers-reduced-motion: reduce) { #countdown span { animation-duration: .01s; animation-delay: 0s; opacity: 1; } }
+
+/* ---------- Multijoueur ---------- */
+.codein { text-transform: uppercase; letter-spacing: .3em; font: 700 16px/1 var(--f-mono); }
+.codein::placeholder { text-transform: none; letter-spacing: normal; font: 400 15px var(--f-body); }
+.codebox { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px dashed var(--sodium); border-radius: 4px; background: #1a140b; }
+.coderow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.code { font: 700 34px/1 var(--f-mono); letter-spacing: .25em; color: var(--sodium); user-select: all; }
+.pbox { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.plist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.plist li { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 4px 10px; font-size: 14px; }
+.pdot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px var(--night); }
+.pname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.you { color: var(--muted); font-size: 12px; }
+.tag { font: 700 10px/1 var(--f-label); text-transform: uppercase; letter-spacing: .1em; color: #1a1006; background: var(--sodium); border-radius: 3px; padding: 2px 5px; vertical-align: 1px; }
+.pst { font-size: 12px; color: var(--muted); text-align: right; }
+.pst.ok { color: var(--ok); }
+.pst.err { color: #ff9b9e; }
+.pbar { grid-column: 2 / -1; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.pbar span { display: block; height: 100%; background: var(--sodium); transform-origin: left; transition: transform .3s; }
+.ready { font: 700 16px/1 var(--f-label); text-transform: uppercase; letter-spacing: .08em; padding: 13px 16px; }
+.ready.on { border-color: var(--ok); color: var(--ok); background: #0f1f17; }
+.ranking { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.ranking li { display: grid; grid-template-columns: 22px 12px 1fr auto auto; align-items: center; gap: 10px; padding: 9px 12px; background: var(--night); font-size: 14px; }
+.ranking li.me { background: #1a140b; }
+.ranking .rk { font: 700 15px/1 var(--f-mono); color: var(--muted); }
+.ranking li:first-child .rk { color: var(--sodium); }
+.ranking .rrole { font-size: 12px; color: var(--muted); }
+.ranking .rt { font: 700 14px/1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.caught.win { color: var(--sodium); }
 </style>
 </head>
 <body>
@@ -210,7 +239,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 <canvas id="fx"></canvas>
 <div id="flash"></div>
 
-<!-- Panneau : choix du lieu, du rôle, puis résultats -->
 <section id="panel" aria-live="polite">
   <div class="brand">
     <h1>Dead Ends</h1>
@@ -245,22 +273,51 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     <p class="fine">La clé reste dans ton navigateur. Elle n'est envoyée qu'à CARTO pour afficher la carte.</p>
   </div>
 
-  <div class="step" id="stepPlace" hidden>
+  <div class="step" id="stepMenu" hidden>
     <div class="keyline"><span class="coords" id="keyInfo"></span><button type="button" class="link" id="changeKeyBtn">Changer de clé</button></div>
-    <span class="eyebrow">1 · Le point de départ</span>
-    <form class="row" id="searchForm">
-      <input type="text" id="searchInput" placeholder="Une adresse, une ville…" autocomplete="off">
-      <button type="submit">Chercher</button>
+    <label class="eyebrow" for="nameInput">Ton pseudo</label>
+    <input type="text" id="nameInput" maxlength="16" placeholder="Ton pseudo" autocomplete="nickname">
+    <button class="primary" id="createBtn">Créer une partie</button>
+    <span class="eyebrow">Rejoindre une partie</span>
+    <form class="row" id="joinForm">
+      <input type="text" id="codeInput" maxlength="5" placeholder="Code (ex. K7QXM)" autocomplete="off" spellcheck="false" class="codein">
+      <button type="submit">Rejoindre</button>
     </form>
-    <div class="coords" id="pickInfo">Clique sur la carte pour placer le point zéro.</div>
-    <span class="eyebrow">Taille de la zone</span>
-    <div class="seg" role="radiogroup" aria-label="Taille de la zone">
-      <label><input type="radio" name="radius" id="r800" value="800"><span class="t">Quartier</span><span class="d">r = 800 m</span></label>
-      <label><input type="radio" name="radius" id="r1500" value="1500" checked><span class="t">Ville</span><span class="d">r = 1,5 km</span></label>
-      <label><input type="radio" name="radius" id="r2500" value="2500"><span class="t">Large</span><span class="d">r = 2,5 km</span></label>
+    <button class="ghost" id="soloBtn">Jouer seul</button>
+    <div class="status" id="menuStatus"></div>
+  </div>
+
+  <div class="step" id="stepLobby" hidden>
+    <div class="codebox" id="codeBox">
+      <span class="eyebrow">Code de la partie</span>
+      <div class="coderow"><span class="code" id="codeText">-----</span><button type="button" class="copy" data-copy="codeText">Copier</button></div>
+      <span class="fine">Envoie ce code à tes amis : ils le saisissent dans « Rejoindre une partie ».</span>
     </div>
-    <label class="check"><input type="checkbox" id="withPaths" checked> <span>Inclure les chemins piétons et allées <span class="fine">(sentiers, passages, parkings)</span></span></label>
-    <button class="primary" id="loadBtn" disabled>Charger les rues</button>
+    <div class="step" id="hostZone">
+      <span class="eyebrow">Le point de départ</span>
+      <form class="row" id="searchForm">
+        <input type="text" id="searchInput" placeholder="Une adresse, une ville…" autocomplete="off">
+        <button type="submit">Chercher</button>
+      </form>
+      <div class="coords" id="pickInfo">Clique sur la carte pour placer le point zéro.</div>
+      <div class="status" id="zoneStatus"></div>
+      <span class="eyebrow">Taille de la zone</span>
+      <div class="seg" role="radiogroup" aria-label="Taille de la zone">
+        <label><input type="radio" name="radius" id="r800" value="800"><span class="t">Quartier</span><span class="d">r = 800 m</span></label>
+        <label><input type="radio" name="radius" id="r1500" value="1500" checked><span class="t">Ville</span><span class="d">r = 1,5 km</span></label>
+        <label><input type="radio" name="radius" id="r2500" value="2500"><span class="t">Large</span><span class="d">r = 2,5 km</span></label>
+      </div>
+      <label class="check"><input type="checkbox" id="withPaths" checked> <span>Inclure les chemins piétons et allées <span class="fine">(sentiers, passages, parkings)</span></span></label>
+      <button class="primary" id="loadBtn" disabled>Charger la zone</button>
+    </div>
+    <div class="step" id="guestZone" hidden>
+      <span class="eyebrow">Le point de départ</span>
+      <p class="note" id="guestZoneText">L'hôte choisit où l'infection commence…</p>
+    </div>
+  </div>
+
+  <div class="step" id="stepLoad" hidden>
+    <span class="eyebrow">Chargement de la zone</span>
     <div class="loader" id="loader" hidden role="status">
       <div class="lbar" aria-hidden="true"><div class="lfill" id="lFill"></div></div>
       <div class="lrow"><span id="lPhase">Secteurs chargés : 0</span><span class="coords" id="lTime">0 s</span></div>
@@ -269,11 +326,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
       <button type="button" class="ghost" id="cancelBtn">Annuler</button>
     </div>
     <div class="status" id="loadStatus"></div>
-    <button class="ghost" id="fakeBtn" hidden>Jouer sur une ville générée</button>
+    <p class="fine" id="waitAll" hidden>Ta carte est prête. La partie continue dès que tout le monde a fini de charger.</p>
+    <button id="retryBtn" hidden>Réessayer le chargement</button>
+    <button class="ghost" id="fakeBtn" hidden>Jouer sur une ville générée (pour tout le monde)</button>
   </div>
 
   <div class="step" id="stepRole" hidden>
-    <span class="eyebrow">2 · Ton rôle</span>
+    <span class="eyebrow">Ton rôle</span>
     <div class="roles">
       <label class="role"><input type="radio" name="role" id="roleCoureur" value="coureur" checked>
         <span class="glyph">C</span>
@@ -285,14 +344,17 @@ button:disabled { opacity: .45; cursor: not-allowed; }
         <span class="glyph">E</span>
         <span><span class="name">Endurant</span><br><span class="perk">Endurance <b>×1,9</b>, récupère <b>+50 %</b></span></span></label>
     </div>
-    <button class="primary" id="readyBtn">Prêt</button>
-    <button class="ghost" id="backBtn">Changer de lieu</button>
+    <button class="ready" id="readyBtn">Je suis prêt</button>
+    <button class="primary" id="launchBtn" hidden>Lancer la partie</button>
+    <p class="fine" id="roleWait" hidden>L'hôte lance la partie dès que tout le monde est prêt.</p>
+    <button class="ghost" id="backBtn" hidden>Changer de lieu</button>
   </div>
 
   <div class="step" id="stepOver" hidden>
-    <p class="caught">Rattrapé</p>
+    <p class="caught" id="overTitle">Rattrapé</p>
+    <ol class="ranking" id="ranking"></ol>
     <div class="results">
-      <div><span class="k">Survie</span><span class="v" id="rTime">0:00.0</span></div>
+      <div><span class="k">Ta survie</span><span class="v" id="rTime">0:00.0</span></div>
       <div><span class="k">Distance</span><span class="v" id="rDist">0 m</span></div>
       <div><span class="k">Vague</span><span class="v" id="rWave">0</span></div>
       <div><span class="k">Zombies</span><span class="v" id="rZomb">0</span></div>
@@ -300,7 +362,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     <div class="best" id="rBest"></div>
     <button class="primary" id="againBtn">Rejouer ici</button>
     <button class="ghost" id="elsewhereBtn">Changer de lieu</button>
+    <p class="fine" id="overWait" hidden>L'hôte décide de la suite : rejouer ici ou changer de lieu.</p>
   </div>
+
+  <div class="pbox" id="pbox" hidden>
+    <span class="eyebrow">Joueurs <span id="pcount"></span></span>
+    <ul class="plist" id="plist"></ul>
+  </div>
+  <button class="ghost" id="leaveBtn" hidden>Quitter la partie</button>
 </section>
 
 <div id="hud" hidden>
@@ -309,6 +378,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     <span class="k">Survie</span><span class="v big" id="hTime">0:00.0</span>
     <span class="k">Vague</span><span class="v" id="hWave">–</span>
     <span class="k">Zombies</span><span class="v" id="hZomb">0</span>
+    <span class="k" id="hAliveK">En vie</span><span class="v" id="hAliveRow"><span id="hAlive">1 / 1</span></span>
     <span class="k">Distance</span><span class="v" id="hDist">0 m</span>
   </div>
   <div id="banner" hidden></div>
@@ -327,10 +397,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 <div id="countdown"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 "use strict";
 /* =====================================================================
-   DEAD ENDS — prototype solo
+   DEAD ENDS — prototype (solo et multijoueur)
    Carte : OpenStreetMap (tuiles CARTO), réseau routier via Overpass.
    ===================================================================== */
 
@@ -396,7 +467,7 @@ map.zoomControl.setPosition("topright");
 let pickMarker = null, zoneCircle = null, roadsLayer = null;
 let picked = null;          // {lat, lon}
 let G = null;               // graphe routier
-let state = "key";          // key | pick | role | countdown | play | over
+let state = "key";          // key | menu | lobby | loading | role | countdown | play | over
 
 /* ---------------- Tas binaire (Dijkstra / A*) ---------------- */
 class Heap {
@@ -475,7 +546,7 @@ function buildGraph(data, lat0, lon0, withPaths = true) {
   buildGrid(g);
   // stamps pour la recherche de chemin
   g.gArr = new Float64Array(N); g.gStamp = new Int32Array(N); g.closed = new Int32Array(N); g.prev = new Int32Array(N); g.stamp = 0;
-  g.dist = new Float64Array(N); g.next = new Int32Array(N);
+  g.dist = new Float64Array(N); g.next = new Int32Array(N); g.owner = new Int16Array(N);
   return g;
 }
 const CELL = 40;
@@ -554,16 +625,18 @@ function route(S, T) {
   return wps;
 }
 // Champ de poursuite : distance de chaque carrefour au joueur + prochain carrefour à prendre
-function computeField(P) {
-  const g = G; const dist = g.dist, next = g.next; dist.fill(Infinity); next.fill(-1);
+// Champ de poursuite : distance de chaque carrefour au joueur le plus proche (plusieurs sources),
+// prochain carrefour à prendre, et joueur visé (owner = index dans la liste des cibles)
+function computeField(srcs) {
+  const g = G; const dist = g.dist, next = g.next, owner = g.owner; dist.fill(Infinity); next.fill(-1); owner.fill(-1);
   const H = new Heap();
-  const seed = (n) => { const d = hyp(P.x, P.y, g.X[n], g.Y[n]); if (d < dist[n]) { dist[n] = d; H.push(d, n); } };
-  seed(P.a); if (P.b !== P.a) seed(P.b);
+  const seed = (n, i, P) => { const d = hyp(P.x, P.y, g.X[n], g.Y[n]); if (d < dist[n]) { dist[n] = d; next[n] = -1; owner[n] = i; H.push(d, n); } };
+  srcs.forEach((P, i) => { seed(P.a, i, P); if (P.b !== P.a) seed(P.b, i, P); });
   while (H.size) {
     const n = H.pop(); const d = H.topK; if (d > dist[n]) continue;
     for (let p = g.adjStart[n]; p < g.adjStart[n + 1]; p++) {
       const m = g.adjTo[p], c = d + g.adjLen[p];
-      if (c < dist[m]) { dist[m] = c; next[m] = n; H.push(c, m); }
+      if (c < dist[m]) { dist[m] = c; next[m] = n; owner[m] = owner[n]; H.push(c, m); }
     }
   }
 }
@@ -595,20 +668,444 @@ function advance(ent, dist) {
   return dist;
 }
 
+/* =====================================================================
+   MULTIJOUEUR
+   L'hôte fait autorité : il choisit la zone, fait tourner les zombies et les vagues,
+   détecte les captures et envoie l'état du monde 10 fois par seconde.
+   Chaque joueur déplace son propre personnage sur sa copie de la carte et envoie sa position.
+   Connexion directe entre navigateurs (WebRTC via PeerJS) : pas de serveur de jeu.
+   ===================================================================== */
+const COLORS = ["#ffad42", "#5ec8f2", "#b58cff", "#7ee081", "#ff7fb0", "#f2e35e", "#4fd1c5", "#ff9e6b"];
+const MAX_PLAYERS = 8;
+const NAME_STORE = "deadends.name";
+const PEER_PREFIX = "deadends-v1-";
+const LOCAL = /[?&]local\b/.test(location.search); // test hors ligne : plusieurs onglets du même navigateur
+let myName = ""; try { myName = localStorage.getItem(NAME_STORE) || ""; } catch {}
+
+let net = null;          // null = solo ; { host: true, link } ; { host: false, link }
+let isHost = true;
+let myId = "host";
+let players = new Map(); // id -> joueur (l'hôte fait autorité, les autres reçoivent une copie)
+let zone = null;         // { lat, lon, r, paths, fake }
+let leaving = false;
+
+const makeCode = () => { const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let s = ""; for (let i = 0; i < 5; i++) s += A[(Math.random() * A.length) | 0]; return s; };
+const cleanName = (n) => (String(n || "").replace(/[<>&"]/g, "").trim().slice(0, 16) || "Joueur");
+
+/* ---------------- Transport : PeerJS (internet) ou BroadcastChannel (test local) ---------------- */
+function peerHost(code, ev) {
+  return new Promise((resolve, reject) => {
+    if (typeof Peer === "undefined") { reject(new Error("nolib")); return; }
+    const peer = new Peer(PEER_PREFIX + code); let open = false;
+    peer.on("open", () => { open = true; resolve({ close: () => { try { peer.destroy(); } catch {} } }); });
+    peer.on("error", (e) => { if (!open) reject(e); else console.warn("PeerJS", e.type); });
+    peer.on("disconnected", () => { try { if (!peer.destroyed) peer.reconnect(); } catch {} });
+    peer.on("connection", (conn) => {
+      const link = { send: (m) => { try { conn.send(m); } catch {} }, close: () => { try { conn.close(); } catch {} } };
+      conn.on("open", () => ev.onJoin(conn.peer, link));
+      conn.on("data", (d) => ev.onData(conn.peer, d));
+      conn.on("close", () => ev.onLeave(conn.peer));
+      conn.on("error", () => ev.onLeave(conn.peer));
+    });
+  });
+}
+function peerJoin(code, ev) {
+  return new Promise((resolve, reject) => {
+    if (typeof Peer === "undefined") { reject(new Error("nolib")); return; }
+    const peer = new Peer(); let done = false;
+    const fail = (e) => { if (done) return; done = true; clearTimeout(to); try { peer.destroy(); } catch {} reject(e); };
+    const to = setTimeout(() => fail(new Error("timeout")), 15000);
+    peer.on("error", (e) => { if (!done) fail(e); });
+    peer.on("open", (id) => {
+      const conn = peer.connect(PEER_PREFIX + code, { reliable: true, serialization: "json" });
+      conn.on("open", () => {
+        if (done) return; done = true; clearTimeout(to);
+        resolve({ id, send: (m) => { try { conn.send(m); } catch {} }, close: () => { try { conn.close(); } catch {} try { peer.destroy(); } catch {} } });
+      });
+      conn.on("data", (d) => ev.onData(d));
+      conn.on("close", () => ev.onClose());
+      conn.on("error", () => ev.onClose());
+    });
+  });
+}
+function localHost(code, ev) {
+  const bc = new BroadcastChannel("deadends-" + code); const known = new Set();
+  bc.onmessage = (e) => {
+    const m = e.data; if (m.to !== "host") return;
+    if (m.kind === "hello") {
+      if (known.has(m.from)) return; known.add(m.from);
+      bc.postMessage({ to: m.from, kind: "welcome" });
+      ev.onJoin(m.from, { send: (d) => bc.postMessage({ to: m.from, kind: "data", d }), close() {} });
+    } else if (m.kind === "data") ev.onData(m.from, m.d);
+    else if (m.kind === "bye") { known.delete(m.from); ev.onLeave(m.from); }
+  };
+  const bye = () => bc.postMessage({ to: "*", from: "host", kind: "bye" });
+  window.addEventListener("beforeunload", bye);
+  return Promise.resolve({ close: () => { bye(); bc.close(); } });
+}
+function localJoin(code, ev) {
+  return new Promise((resolve, reject) => {
+    const bc = new BroadcastChannel("deadends-" + code); const id = "g" + Math.random().toString(36).slice(2, 8);
+    const to = setTimeout(() => { bc.close(); reject(Object.assign(new Error("absent"), { type: "peer-unavailable" })); }, 2500);
+    bc.onmessage = (e) => {
+      const m = e.data;
+      if (m.to === "*" && m.kind === "bye" && m.from === "host") { ev.onClose(); return; }
+      if (m.to !== id) return;
+      if (m.kind === "welcome") {
+        clearTimeout(to);
+        resolve({ id, send: (d) => bc.postMessage({ to: "host", from: id, kind: "data", d }), close: () => { bc.postMessage({ to: "host", from: id, kind: "bye" }); bc.close(); } });
+      } else if (m.kind === "data") ev.onData(m.d);
+    };
+    window.addEventListener("beforeunload", () => bc.postMessage({ to: "host", from: id, kind: "bye" }));
+    bc.postMessage({ to: "host", from: id, kind: "hello" });
+  });
+}
+const Transport = { host: (c, ev) => (LOCAL ? localHost(c, ev) : peerHost(c, ev)), join: (c, ev) => (LOCAL ? localJoin(c, ev) : peerJoin(c, ev)) };
+
+/* ---------------- Joueurs ---------------- */
+function newPlayer(id, name, host) {
+  const used = new Set([...players.values()].map((p) => p.color));
+  return {
+    id, name: cleanName(name), host, color: COLORS.find((c) => !used.has(c)) || COLORS[0],
+    load: { done: 0, n: 0 }, loaded: false, failed: false, ready: false, role: "coureur",
+    alive: true, time: 0, x: 0, y: 0, dir: 0, trail: 0, sp: null, link: null,
+  };
+}
+const me = () => players.get(myId);
+function publicPlayers() {
+  return [...players.values()].map((p) => ({ id: p.id, name: p.name, host: p.host, color: p.color, load: p.load, loaded: p.loaded, failed: p.failed, ready: p.ready, role: p.role, alive: p.alive }));
+}
+// L'hôte envoie à tous ; send() du côté invité va vers l'hôte.
+function broadcast(m) { if (!net || !net.host) return; for (const p of players.values()) if (p.link) p.link.send(m); }
+function toHost(m) { if (net && !net.host) net.link.send(m); }
+let lobbyDirty = false;
+function pushLobby() { lobbyDirty = true; }
+setInterval(() => {
+  if (!lobbyDirty) return; lobbyDirty = false;
+  if (isHost) broadcast({ t: "lobby", players: publicPlayers(), zone });
+  renderPlayers(); refreshRoleButtons();
+}, 150);
+
+function renderPlayers() {
+  const box = $("pbox");
+  const show = !!net && ["lobby", "loading", "role", "over"].includes(state);
+  box.hidden = !show;
+  $("leaveBtn").hidden = !["lobby", "loading", "role", "over"].includes(state);
+  $("leaveBtn").textContent = net ? "Quitter la partie" : "Retour au menu";
+  if (!show) return;
+  const list = $("plist"); list.innerHTML = "";
+  $("pcount").textContent = `${players.size} / ${MAX_PLAYERS}`;
+  for (const p of players.values()) {
+    const li = document.createElement("li");
+    let st = "Connecté", cls = "";
+    if (state === "loading") {
+      if (p.loaded) { st = "Carte prête"; cls = "ok"; }
+      else if (p.failed) { st = "Échec du chargement"; cls = "err"; }
+      else st = p.load.n ? `Chargement ${p.load.done} / ${p.load.n}` : "Chargement…";
+    } else if (state === "role") { st = p.ready ? `Prêt · ${ROLES[p.role].name}` : "Choisit son rôle…"; cls = p.ready ? "ok" : ""; }
+    else if (state === "over") { st = ROLES[p.role].name; }
+    const pct = state === "loading" && p.load.n ? Math.round((p.load.done / p.load.n) * 100) : (p.loaded ? 100 : 0);
+    li.innerHTML = `<span class="pdot" style="background:${p.color}"></span>
+      <span class="pname">${p.name}${p.id === myId ? ' <span class="you">(toi)</span>' : ""}${p.host ? ' <span class="tag">Hôte</span>' : ""}</span>
+      <span class="pst ${cls}">${st}</span>${state === "loading" ? `<span class="pbar"><span style="transform:scaleX(${pct / 100})"></span></span>` : ""}`;
+    list.appendChild(li);
+  }
+}
+
+/* ---------------- Menu, création, connexion ---------------- */
+function goMenu(msg) {
+  if (net) { try { net.link.close(); } catch {} }
+  net = null; isHost = true; myId = "host"; players = new Map(); zone = null; game = null; G = null;
+  if (loadCtl) loadCtl.abort(); hideLoader();
+  clearMapLayers();
+  $("panel").hidden = false; $("hud").hidden = true; $("countdown").innerHTML = "";
+  map.dragging.enable(); map.doubleClickZoom.enable();
+  state = "menu"; showStep("stepMenu");
+  $("nameInput").value = myName;
+  menuStatus(msg || "", msg ? "err" : "");
+  renderPlayers();
+}
+function clearMapLayers() {
+  for (const l of [roadsLayer, zoneCircle, pickMarker]) if (l) l.remove();
+  roadsLayer = zoneCircle = pickMarker = null; picked = null;
+}
+function menuStatus(t, cls) { const s = $("menuStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); }
+function saveName() { myName = cleanName($("nameInput").value); $("nameInput").value = myName; try { localStorage.setItem(NAME_STORE, myName); } catch {} }
+
+function startSolo() {
+  saveName(); net = null; isHost = true; myId = "host";
+  players = new Map(); players.set(myId, newPlayer(myId, myName, true));
+  enterLobby();
+}
+async function startHost() {
+  saveName(); menuStatus("Création de la partie…");
+  $("createBtn").disabled = true;
+  for (let i = 0; i < 4; i++) {
+    const code = makeCode();
+    try {
+      const link = await Transport.host(code, { onJoin: hostOnJoin, onData: hostOnData, onLeave: hostOnLeave });
+      net = { host: true, link, code }; isHost = true; myId = "host";
+      players = new Map(); players.set(myId, newPlayer(myId, myName, true));
+      $("createBtn").disabled = false; menuStatus("");
+      enterLobby(); return;
+    } catch (e) {
+      if (e && e.type === "unavailable-id") continue; // code déjà pris : on en tire un autre
+      $("createBtn").disabled = false;
+      menuStatus(e && e.message === "nolib" ? "Le module réseau n'a pas pu se charger. Vérifie ta connexion." : "Impossible de créer la partie (serveur de mise en relation injoignable). Réessaie dans un instant.", "err");
+      return;
+    }
+  }
+  $("createBtn").disabled = false; menuStatus("Impossible de trouver un code libre. Réessaie.", "err");
+}
+async function startJoin(code) {
+  saveName(); code = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (code.length !== 5) { menuStatus("Le code fait 5 caractères (lettres et chiffres).", "err"); return; }
+  menuStatus("Connexion à la partie…");
+  try {
+    const link = await Transport.join(code, { onData: guestOnData, onClose: guestOnClose });
+    net = { host: false, link, code }; isHost = false; myId = link.id;
+    players = new Map();
+    toHost({ t: "hello", name: myName });
+    state = "lobby"; showStep("stepLobby"); setupLobbyView(); menuStatus("");
+  } catch (e) {
+    const t = e && e.type;
+    menuStatus(t === "peer-unavailable" ? "Aucune partie avec ce code. Vérifie-le auprès de l'hôte."
+      : e && e.message === "nolib" ? "Le module réseau n'a pas pu se charger. Vérifie ta connexion."
+      : "Connexion impossible. Certains réseaux (entreprise, 4G) bloquent les connexions directes entre joueurs.", "err");
+  }
+}
+
+/* ---------------- Côté hôte : messages des joueurs ---------------- */
+function hostOnJoin(id, link) {
+  if (state !== "lobby") { link.send({ t: "refused", why: "started" }); setTimeout(() => link.close(), 300); return; }
+  if (players.size >= MAX_PLAYERS) { link.send({ t: "refused", why: "full" }); setTimeout(() => link.close(), 300); return; }
+  const p = newPlayer(id, "Joueur", false); p.link = link; players.set(id, p);
+  link.send({ t: "welcome", id });
+  pushLobby();
+}
+function hostOnLeave(id) {
+  const p = players.get(id); if (!p) return;
+  players.delete(id);
+  if (state === "play" && game) { banner(`${p.name} a quitté la partie`, false, 2500); checkEnd(); }
+  if (state === "loading") checkAllLoaded();
+  pushLobby();
+}
+function hostOnData(id, m) {
+  const p = players.get(id); if (!p || !m) return;
+  switch (m.t) {
+    case "hello": p.name = cleanName(m.name); pushLobby(); break;
+    case "progress": p.load = { done: +m.done || 0, n: +m.n || 0 }; pushLobby(); break;
+    case "loaded": p.loaded = !!m.ok; p.failed = !m.ok; pushLobby(); checkAllLoaded(); break;
+    case "ready": if (state === "role") { p.ready = !!m.ready; p.role = ROLES[m.role] ? m.role : "coureur"; pushLobby(); } break;
+    case "pos":
+      if (state === "play" && G && p.alive) {
+        p.x = +m.x; p.y = +m.y; p.dir = +m.dir || 0; p.trail = +m.trail || 0;
+        p.sp = snap(p.x, p.y, 80);
+      }
+      break;
+  }
+}
+
+/* ---------------- Côté invité : messages de l'hôte ---------------- */
+function guestOnClose() {
+  if (leaving) return;
+  goMenu("L'hôte a quitté la partie.");
+}
+function guestOnData(m) {
+  if (!m) return;
+  switch (m.t) {
+    case "welcome": myId = m.id; break;
+    case "refused": leaving = true; goMenu(m.why === "full" ? "Cette partie est complète." : "Cette partie a déjà commencé."); leaving = false; break;
+    case "lobby": {
+      const prev = players; players = new Map();
+      for (const q of m.players) players.set(q.id, Object.assign(prev.get(q.id) || { x: 0, y: 0, dir: 0, trail: 0 }, q));
+      const zChanged = JSON.stringify(m.zone) !== JSON.stringify(zone);
+      zone = m.zone;
+      if (zChanged && state === "lobby") showGuestZone();
+      renderPlayers(); refreshRoleButtons();
+      break;
+    }
+    case "load": zone = m.zone; startLoading(); break;
+    case "role": enterRole(); break;
+    case "toLobby": enterLobby(); break;
+    case "start": startCountdown(); break;
+    case "snap": applySnap(m); break;
+    case "ev": handleEvent(m); break;
+    case "over": showResults(m.results, m.wave); break;
+  }
+}
+
+/* ---------------- Salon : choix de la zone ---------------- */
+function enterLobby() {
+  state = "lobby"; game = null; G = null;
+  for (const p of players.values()) { p.loaded = false; p.failed = false; p.ready = false; p.load = { done: 0, n: 0 }; p.alive = true; }
+  if (roadsLayer) { roadsLayer.remove(); roadsLayer = null; }
+  $("panel").hidden = false; $("hud").hidden = true;
+  map.dragging.enable(); map.doubleClickZoom.enable();
+  showStep("stepLobby"); setupLobbyView();
+  if (isHost) { broadcast({ t: "toLobby" }); if (picked) setPick(L.latLng(picked.lat, picked.lon)); }
+  else showGuestZone();
+  pushLobby();
+}
+function setupLobbyView() {
+  $("codeBox").hidden = !net;
+  if (net) $("codeText").textContent = net.code;
+  $("hostZone").hidden = !isHost; $("guestZone").hidden = isHost;
+  $("loadBtn").textContent = net ? "Charger la zone pour tout le monde" : "Charger les rues";
+}
+function currentZone() { return picked ? { lat: picked.lat, lon: picked.lon, r: radius(), paths: $("withPaths").checked, fake: false } : null; }
+function zoneChanged() { if (!isHost) return; zone = currentZone(); pushLobby(); }
+function showGuestZone() {
+  if (zoneCircle) { zoneCircle.remove(); zoneCircle = null; }
+  if (!zone) { $("guestZoneText").textContent = "L'hôte choisit où l'infection commence…"; return; }
+  zoneCircle = L.circle([zone.lat, zone.lon], { radius: zone.r, color: css("--sodium"), weight: 1.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
+  map.fitBounds(zoneCircle.getBounds(), { paddingTopLeft: [window.innerWidth > 640 ? 400 : 0, 0] });
+  $("guestZoneText").textContent = `Zone choisie : rayon ${zone.r >= 1000 ? (zone.r / 1000).toString().replace(".", ",") + " km" : zone.r + " m"}${zone.paths ? ", chemins piétons inclus" : ", rues seulement"}. En attente du chargement…`;
+}
+
+/* ---------------- Chargement (chaque joueur charge la même zone) ---------------- */
+function hostStartLoad(fake) {
+  if (!isHost) return;
+  zone = currentZone(); if (!zone) return;
+  zone.fake = !!fake;
+  for (const p of players.values()) { p.loaded = false; p.failed = false; p.load = { done: 0, n: 0 }; }
+  broadcast({ t: "load", zone });
+  startLoading();
+}
+let lastProgSent = 0;
+async function startLoading() {
+  state = "loading"; showStep("stepLoad");
+  $("retryBtn").hidden = true; $("fakeBtn").hidden = true; $("waitAll").hidden = true; lstatus("");
+  if (roadsLayer) { roadsLayer.remove(); roadsLayer = null; }
+  if (zoneCircle) zoneCircle.remove();
+  zoneCircle = L.circle([zone.lat, zone.lon], { radius: zone.r, color: css("--sodium"), weight: 1.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
+  map.fitBounds(zoneCircle.getBounds(), { paddingTopLeft: [window.innerWidth > 640 ? 400 : 0, 0] });
+  pushLobby();
+  if (zone.fake) { finishLoading(fakeCity(zone.lat, zone.lon, zone.r), true); return; }
+  const cells = makeCells(zone.lat, zone.lon, zone.r);
+  loading = { t0: performance.now(), cells, preview: L.layerGroup().addTo(map) };
+  loading.timer = setInterval(() => {
+    if (!loading) return;
+    const sec = (performance.now() - loading.t0) / 1000;
+    $("lTime").textContent = `${Math.floor(sec)} s`;
+    if (sec > 20) $("lSlow").hidden = false;
+  }, 200);
+  $("lSlow").hidden = true; $("lTime").textContent = "0 s"; $("loader").hidden = false;
+  $("lFill").style.transform = "scaleX(0)"; $("lPhase").textContent = `Secteurs chargés : 0 / ${cells.length}`; $("lHint").textContent = "Connexion aux serveurs OpenStreetMap…";
+  reportProgress(0, cells.length, true);
+  try {
+    const data = await fetchRoads(cells, onCell);
+    $("lPhase").textContent = "Construction du réseau de rues…";
+    await new Promise((r) => setTimeout(r, 40));
+    hideLoader();
+    finishLoading(data, false);
+  } catch (err) {
+    hideLoader();
+    if (state !== "loading") return;
+    lstatus(err && err.name === "AbortError" ? "Chargement annulé." : "Impossible de récupérer toutes les rues (serveurs saturés ou hors ligne).", "err");
+    $("retryBtn").hidden = false;
+    if (isHost) $("fakeBtn").hidden = false;
+    reportLoaded(false);
+  }
+}
+function reportProgress(done, n, force) {
+  const p = me(); if (p) p.load = { done, n };
+  const now = performance.now();
+  if (!isHost && (force || now - lastProgSent > 250 || done === n)) { lastProgSent = now; toHost({ t: "progress", done, n }); }
+  if (isHost) pushLobby();
+}
+function reportLoaded(ok) {
+  const p = me(); if (p) { p.loaded = ok; p.failed = !ok; }
+  if (isHost) { pushLobby(); checkAllLoaded(); } else toHost({ t: "loaded", ok });
+}
+function finishLoading(data, generated) {
+  const g = buildGraph(data, zone.lat, zone.lon, zone.paths);
+  if (!g || g.N < 20) {
+    lstatus("Pas assez de rues dans cette zone.", "err");
+    if (isHost) $("fakeBtn").hidden = false;
+    reportLoaded(false); return;
+  }
+  G = g; drawNetwork(generated);
+  lstatus(`${G.N.toLocaleString("fr-FR")} carrefours et ${G.EA.length.toLocaleString("fr-FR")} tronçons chargés${generated ? " (ville générée)" : ""}.`, "good");
+  $("waitAll").hidden = !net;
+  reportLoaded(true);
+}
+function checkAllLoaded() {
+  if (!isHost || state !== "loading") return;
+  const all = [...players.values()];
+  if (all.length && all.every((p) => p.loaded)) { broadcast({ t: "role" }); enterRole(); }
+  else if (all.some((p) => p.failed)) $("fakeBtn").hidden = false;
+}
+function drawNetwork(generated) {
+  if (roadsLayer) roadsLayer.remove();
+  const toLine = (w) => w.nodes.map((n) => toLL(G.X[n], G.Y[n]));
+  roadsLayer = L.layerGroup([
+    L.polyline(G.ways.filter((w) => !w.minor).map(toLine), { color: css("--sodium"), opacity: generated ? 0.55 : 0.45, weight: generated ? 3 : 2.5, interactive: false }),
+    L.polyline(G.ways.filter((w) => w.minor).map(toLine), { color: css("--sodium"), opacity: 0.6, weight: 1.6, dashArray: "3 5", interactive: false }),
+  ]).addTo(map);
+  if (pickMarker) { pickMarker.remove(); pickMarker = null; }
+}
+function lstatus(t, cls) { const s = $("loadStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); }
+
+/* ---------------- Rôles ---------------- */
+function enterRole() {
+  state = "role"; game = null;
+  for (const p of players.values()) { p.ready = false; p.alive = true; p.time = 0; }
+  $("panel").hidden = false; $("hud").hidden = true;
+  map.dragging.enable(); map.doubleClickZoom.enable();
+  if (G) map.setView(toLL(G.X[G.spawn], G.Y[G.spawn]), 16);
+  if (zoneCircle) zoneCircle.remove();
+  zoneCircle = L.circle([zone.lat, zone.lon], { radius: zone.r, color: css("--sodium"), weight: 1.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
+  showStep("stepRole");
+  pushLobby(); refreshRoleButtons();
+}
+function myRole() { return document.querySelector('input[name="role"]:checked').value; }
+function refreshRoleButtons() {
+  if (state !== "role") return;
+  const p = me(); if (!p) return;
+  $("readyBtn").hidden = !net;
+  $("readyBtn").textContent = p.ready ? "Prêt ✓ · cliquer pour annuler" : "Je suis prêt";
+  $("readyBtn").classList.toggle("on", !!p.ready);
+  $("launchBtn").hidden = !isHost; $("backBtn").hidden = !isHost;
+  const others = [...players.values()];
+  const allReady = !net || others.every((q) => q.ready);
+  $("launchBtn").disabled = !allReady;
+  $("launchBtn").textContent = !net ? "Lancer la partie" : allReady ? "Lancer la partie" : `Lancer (${others.filter((q) => q.ready).length} / ${others.length} prêts)`;
+  $("roleWait").hidden = isHost || !p.ready;
+}
+function toggleReady() {
+  const p = me(); if (!p) return;
+  p.ready = !p.ready; p.role = myRole();
+  if (isHost) pushLobby(); else toHost({ t: "ready", ready: p.ready, role: p.role });
+  refreshRoleButtons(); renderPlayers();
+}
+document.querySelectorAll('input[name="role"]').forEach((r) => r.addEventListener("change", () => {
+  const p = me(); if (!p) return; p.role = myRole();
+  if (p.ready) { if (isHost) pushLobby(); else toHost({ t: "ready", ready: true, role: p.role }); }
+}));
+function hostLaunch() {
+  if (!isHost) return;
+  const p = me(); p.role = myRole(); p.ready = true;
+  if (net && ![...players.values()].every((q) => q.ready)) return;
+  broadcast({ t: "start" });
+  startCountdown();
+}
+
 /* ---------------- Partie ---------------- */
 let game = null;
-function newGame(roleKey) {
-  const r = ROLES[roleKey];
-  const s = G.spawn;
+function newGame() {
+  const p = me(); const roleKey = isHost ? myRole() : p.role || myRole();
+  p.role = roleKey;
+  const r = ROLES[roleKey], s = G.spawn;
   game = {
-    role: roleKey, R: r, t: 0, phase: "countdown",
-    player: { x: G.X[s], y: G.Y[s], a: s, b: s, route: [], trail: 0, dir: 0, stamina: r.stamina },
-    zombies: [], wave: 0, nextWave: CFG.zombieDelay, pending: [], fieldT: 0, sprint: false, lastBanner: "",
-    upcoming: null,   // prochaine vague annoncée : {at, nodes}
-    nests: [],        // anciens points d'apparition
-
+    R: r, t: 0, wave: 0, nextWave: CFG.zombieDelay, pending: [], fieldT: 0, sendT: 0, sprint: false, sprinting: false, lastBanner: "",
+    player: { x: G.X[s], y: G.Y[s], a: s, b: s, route: [], trail: 0, dir: 0, stamina: r.stamina, alive: true },
+    zombies: [],      // hôte : zombies simulés ; invités : positions reçues (lissées)
+    upcoming: null,   // vague annoncée : { at, pts: [{x, y}] }
+    nests: [],        // anciens points d'apparition [{x, y}]
+    targets: [],      // hôte : positions des joueurs en vie (pour la poursuite)
   };
-  computeField(game.player);
+  for (const q of players.values()) { q.alive = true; q.time = 0; q.x = G.X[s]; q.y = G.Y[s]; q.trail = 0; q.sp = { x: q.x, y: q.y, a: s, b: s }; }
 }
 function waveSpeed(k) { return Math.min(CFG.zSpeedMax, CFG.zSpeed + CFG.zSpeedInc * (k - 1)); }
 function spawnZombie(k, s) {
@@ -616,11 +1113,10 @@ function spawnZombie(k, s) {
   game.zombies.push({
     x: G.X[s], y: G.Y[s], a: s, b: s, route: [],
     speed: waveSpeed(k) * (0.9 + Math.random() * 0.2),
-    ox: Math.cos(ang) * 3, oy: Math.sin(ang) * 3, // léger décalage visuel pour ne pas tous se superposer
-    wob: Math.random() * 10,
+    ox: Math.cos(ang) * 3, oy: Math.sin(ang) * 3, wob: Math.random() * 10,
   });
 }
-// Points d'apparition : carrefours au hasard, ni trop près ni trop loin de toi par les rues
+// Points d'apparition : carrefours au hasard, ni trop près ni trop loin du joueur le plus proche (par les rues)
 function pickSpawnNodes(count) {
   const out = [];
   const ok = (n, min, max) => {
@@ -636,20 +1132,22 @@ function pickSpawnNodes(count) {
   }
   return out.length ? out : [G.spawn];
 }
-// « au nord-est, à 420 m » (distance à vol d'oiseau depuis le joueur)
-function where(n) {
-  const P = game.player; const dx = G.X[n] - P.x, dy = G.Y[n] - P.y;
+// « au nord-est, à 420 m » depuis ma position
+function where(pt) {
+  const P = game.player; const dx = pt.x - P.x, dy = pt.y - P.y;
   const dirs = ["à l'est", "au nord-est", "au nord", "au nord-ouest", "à l'ouest", "au sud-ouest", "au sud", "au sud-est"];
   const i = ((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8;
   return `${dirs[i]}, à ${Math.round(Math.hypot(dx, dy) / 10) * 10} m`;
 }
 function zombieThink(z) {
-  const P = game.player;
-  const direct = { x: P.x, y: P.y, n: -1, ea: P.a, eb: P.b };
-  if (sameEdge(z, P)) { z.route = [direct]; return; }
+  const T = game.targets;
+  for (const P of T) if (sameEdge(z, P)) { z.route = [{ x: P.x, y: P.y, n: -1, ea: P.a, eb: P.b }]; return; }
   if (z.a === z.b) {
     const nx = G.next[z.a];
-    if (nx < 0) { z.route = [direct]; return; }
+    if (nx < 0) {
+      const P = T[G.owner[z.a]] || T[0]; if (!P) { z.route = []; return; }
+      z.route = [{ x: P.x, y: P.y, n: -1, ea: P.a, eb: P.b }]; return;
+    }
     z.route = [{ x: G.X[nx], y: G.Y[nx], n: nx }];
   } else {
     const da = hyp(z.x, z.y, G.X[z.a], G.Y[z.a]) + G.dist[z.a];
@@ -658,49 +1156,138 @@ function zombieThink(z) {
     z.route = [{ x: G.X[t], y: G.Y[t], n: t }];
   }
 }
-
-function update(dt) {
-  const gm = game; const P = gm.player;
-  gm.t += dt;
-  // Vagues : la 1re sort du point zéro, les suivantes d'endroits aléatoires annoncés quelques secondes avant
-  if (!gm.upcoming && gm.t >= gm.nextWave - CFG.waveWarn) {
-    const k = gm.wave + 1;
-    const nodes = k === 1 ? [G.spawn] : pickSpawnNodes(k >= CFG.splitFrom ? 2 : 1);
-    gm.upcoming = { at: gm.nextWave, nodes };
-    if (k > 1) banner(`Vague ${k} dans ${CFG.waveWarn} s · ${nodes.map(where).join(" et ")}`, true, 3500);
-  }
-  if (gm.t >= gm.nextWave) {
-    gm.wave++; const n = CFG.waveBase + CFG.waveInc * (gm.wave - 1);
-    const nodes = gm.upcoming ? gm.upcoming.nodes : [G.spawn];
-    for (let i = 0; i < n; i++) gm.pending.push({ t: gm.t + Math.floor(i / nodes.length) * 0.35, node: nodes[i % nodes.length] });
-    for (const nd of nodes) if (nd !== G.spawn) gm.nests.push(nd);
-    gm.upcoming = null;
-    gm.nextWave += CFG.waveEvery;
-    banner(gm.wave === 1 ? "Ils sortent du point zéro" : `Vague ${gm.wave} · ${n} zombies`, true, 2600);
-    flash();
-  }
-  while (gm.pending.length && gm.pending[0].t <= gm.t) { const p = gm.pending.shift(); spawnZombie(gm.wave, p.node); }
-  if (gm.wave === 0) {
-    const left = Math.ceil(gm.nextWave - gm.t);
-    const txt = `Les zombies sortent dans ${left} s`;
-    if (txt !== gm.lastBanner) { gm.lastBanner = txt; banner(txt, false, 0); }
-  }
-  // Joueur
+// Mon personnage (chaque joueur le déplace lui-même)
+function moveMe(dt) {
+  const gm = game, P = gm.player;
+  if (!P.alive) { gm.sprinting = false; return; }
   const moving = P.route.length > 0;
   const wantSprint = gm.sprint && moving && P.stamina > 0;
   if (wantSprint) P.stamina = Math.max(0, P.stamina - CFG.drain * dt);
   else if (!gm.sprint || !moving) P.stamina = Math.min(gm.R.stamina, P.stamina + CFG.regen * gm.R.regenMul * dt);
-  const speed = CFG.runSpeed * gm.R.speedMul * (wantSprint ? CFG.sprintMul : 1);
-  advance(P, speed * dt);
+  advance(P, CFG.runSpeed * gm.R.speedMul * (wantSprint ? CFG.sprintMul : 1) * dt);
   gm.sprinting = wantSprint;
-  // Champ de poursuite
+}
+// Simulation du monde (hôte uniquement)
+function hostUpdate(dt) {
+  const gm = game;
+  const mine = me(); const P = gm.player;
+  if (mine.alive) { mine.x = P.x; mine.y = P.y; mine.dir = P.dir; mine.trail = P.trail; mine.sp = { x: P.x, y: P.y, a: P.a, b: P.b }; }
+  const alive = [...players.values()].filter((q) => q.alive && q.sp);
+  // Champ de poursuite depuis tous les joueurs en vie
   gm.fieldT -= dt;
-  if (gm.fieldT <= 0) { computeField(P); gm.fieldT = CFG.fieldEvery; }
+  if (gm.fieldT <= 0 && alive.length) { gm.targets = alive.map((q) => q.sp); computeField(gm.targets); gm.fieldT = CFG.fieldEvery; }
+  // Vagues : la 1re sort du point zéro, les suivantes d'endroits aléatoires annoncés à l'avance
+  if (!gm.upcoming && gm.t >= gm.nextWave - CFG.waveWarn) {
+    const k = gm.wave + 1;
+    const nodes = k === 1 ? [G.spawn] : pickSpawnNodes(k >= CFG.splitFrom ? 2 : 1);
+    gm.upcoming = { at: gm.nextWave, nodes, pts: nodes.map((n) => ({ x: G.X[n], y: G.Y[n] })) };
+    if (k > 1) emit({ t: "ev", k: "warn", wave: k, pts: gm.upcoming.pts, left: CFG.waveWarn });
+  }
+  if (gm.t >= gm.nextWave) {
+    gm.wave++; const n = CFG.waveBase + CFG.waveInc * (gm.wave - 1) + Math.max(0, players.size - 1) * 2; // un peu plus de zombies par joueur
+    const nodes = gm.upcoming ? gm.upcoming.nodes : [G.spawn];
+    for (let i = 0; i < n; i++) gm.pending.push({ t: gm.t + Math.floor(i / nodes.length) * 0.35, node: nodes[i % nodes.length] });
+    for (const nd of nodes) if (nd !== G.spawn) gm.nests.push({ x: G.X[nd], y: G.Y[nd] });
+    gm.upcoming = null;
+    gm.nextWave += CFG.waveEvery;
+    emit({ t: "ev", k: "wave", wave: gm.wave, n });
+  }
+  while (gm.pending.length && gm.pending[0].t <= gm.t) { const p = gm.pending.shift(); spawnZombie(gm.wave, p.node); }
   // Zombies
-  for (const z of gm.zombies) {
+  if (gm.targets.length) for (const z of gm.zombies) {
     let left = z.speed * dt;
     for (let i = 0; i < 4 && left > 1e-6; i++) { zombieThink(z); left = advance(z, left); }
-    if (hyp(z.x, z.y, P.x, P.y) < CFG.catchDist) { gameOver(); return; }
+  }
+  // Captures
+  for (const q of alive) {
+    for (const z of gm.zombies) if (hyp(z.x, z.y, q.x, q.y) < CFG.catchDist) { killPlayer(q); break; }
+  }
+  // État du monde envoyé aux joueurs
+  gm.sendT -= dt;
+  if (net && gm.sendT <= 0) {
+    gm.sendT = 0.1;
+    const r1 = (v) => Math.round(v * 10) / 10;
+    broadcast({
+      t: "snap", time: gm.t, w: gm.wave, nw: gm.wave === 0 ? gm.nextWave - gm.t : null,
+      z: gm.zombies.map((z) => [r1(z.x + z.ox), r1(z.y + z.oy)]),
+      p: [...players.values()].map((q) => [q.id, r1(q.x), r1(q.y), Math.round(q.dir * 100) / 100, q.alive ? 1 : 0]),
+      up: gm.upcoming && gm.wave > 0 ? { left: gm.upcoming.at - gm.t, pts: gm.upcoming.pts } : null,
+      nests: gm.nests,
+    });
+  }
+}
+function killPlayer(q) {
+  if (!q.alive) return;
+  q.alive = false; q.time = game.t;
+  emit({ t: "ev", k: "dead", id: q.id, name: q.name, time: q.time });
+  checkEnd();
+}
+function checkEnd() {
+  if (!isHost || state !== "play") return;
+  if ([...players.values()].some((q) => q.alive)) return;
+  const results = [...players.values()]
+    .map((q) => ({ id: q.id, name: q.name, color: q.color, role: q.role, time: q.time, trail: q.trail }))
+    .sort((a, b) => b.time - a.time);
+  const msg = { t: "over", results, wave: game.wave };
+  broadcast(msg); showResults(results, game.wave);
+}
+// Un message de l'hôte est appliqué localement et envoyé à tous
+function emit(m) { broadcast(m); handleEvent(m); }
+function handleEvent(m) {
+  if (!game) return;
+  if (m.k === "warn") {
+    if (!isHost) game.upcoming = { at: game.t + m.left, pts: m.pts };
+    banner(`Vague ${m.wave} dans ${m.left} s · ${m.pts.map(where).join(" et ")}`, true, 3500);
+  } else if (m.k === "wave") {
+    game.wave = m.wave; if (!isHost) game.upcoming = null;
+    banner(m.wave === 1 ? "Ils sortent du point zéro" : `Vague ${m.wave} · ${m.n} zombies`, true, 2600);
+    flash();
+  } else if (m.k === "dead") {
+    const q = players.get(m.id); if (q) { q.alive = false; q.time = m.time; }
+    if (m.id === myId) myDeath();
+    else banner(`${m.name} s'est fait rattraper`, true, 2600);
+  }
+}
+function myDeath() {
+  const P = game.player; P.alive = false; P.route = []; game.sprint = false; drawPts = null; flash();
+  if (!net) return; // en solo, l'écran de fin arrive tout de suite
+  const left = [...players.values()].filter((q) => q.alive).length;
+  banner(left ? `Rattrapé ! Tu observes la fin de la partie (${left} encore en vie)` : "Rattrapé !", true, 0);
+  map.dragging.enable();
+}
+// Invités : application de l'état reçu
+function applySnap(m) {
+  if (!game || !G) return;
+  game.wave = m.w;
+  while (game.zombies.length < m.z.length) { const [x, y] = m.z[game.zombies.length]; game.zombies.push({ x, y, tx: x, ty: y, ox: 0, oy: 0, wob: Math.random() * 10 }); }
+  m.z.forEach(([x, y], i) => { game.zombies[i].tx = x; game.zombies[i].ty = y; });
+  for (const [id, x, y, dir, alive] of m.p) {
+    const q = players.get(id); if (!q || id === myId) continue;
+    if (q.tx === undefined) { q.x = x; q.y = y; }
+    q.tx = x; q.ty = y; q.dir = dir; q.alive = !!alive;
+  }
+  game.upcoming = m.up ? { at: game.t + m.up.left, pts: m.up.pts } : null;
+  game.nests = m.nests || [];
+  game.hostNw = m.nw;
+}
+function guestUpdate(dt) {
+  const gm = game, P = gm.player;
+  const k = Math.min(1, dt * 12);
+  for (const z of gm.zombies) { z.x += (z.tx - z.x) * k; z.y += (z.ty - z.y) * k; }
+  for (const q of players.values()) if (q.id !== myId && q.tx !== undefined) { q.x += (q.tx - q.x) * k; q.y += (q.ty - q.y) * k; }
+  gm.sendT -= dt;
+  if (gm.sendT <= 0 && P.alive) { gm.sendT = 0.1; toHost({ t: "pos", x: Math.round(P.x * 10) / 10, y: Math.round(P.y * 10) / 10, dir: Math.round(P.dir * 100) / 100, trail: Math.round(P.trail) }); }
+}
+function update(dt) {
+  const gm = game;
+  gm.t += dt;
+  moveMe(dt);
+  if (isHost) hostUpdate(dt); else guestUpdate(dt);
+  // compte à rebours avant la 1re vague
+  const nw = isHost ? (gm.wave === 0 ? gm.nextWave - gm.t : null) : gm.hostNw;
+  if (gm.wave === 0 && nw != null) {
+    const txt = `Les zombies sortent dans ${Math.max(0, Math.ceil(nw))} s`;
+    if (txt !== gm.lastBanner) { gm.lastBanner = txt; banner(txt, false, 0); }
   }
 }
 
@@ -723,12 +1310,11 @@ function metersToPx(m) {
   const p2 = map.latLngToContainerPoint(L.latLng(c.lat, c.lng + m / (111320 * Math.cos(c.lat * Math.PI / 180))));
   return Math.abs(p2.x - p1.x);
 }
-let drawPts = null; // tracé en cours (Shift + glisser), en coordonnées écran via latlng
+let drawPts = null; // tracé en cours (Shift + glisser)
 function render(now) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, fx.width, fx.height);
   if (loading && loading.cells) {
-    // secteurs : en attente (pointillés), en cours (contour qui pulse), chargés (remplis), en échec (rouge)
     const pulse = 0.5 + 0.5 * Math.sin(now / 180);
     for (const c of loading.cells) {
       const a = map.latLngToContainerPoint([c.n, c.w]), b = map.latLngToContainerPoint([c.s, c.e]);
@@ -743,12 +1329,12 @@ function render(now) {
   if (!G) return;
   const W = fx.width / DPR, Hh = fx.height / DPR;
   const s = px(G.X[G.spawn], G.Y[G.spawn]);
-  const inGame = game && (state === "play" || state === "countdown" || state === "over");
+  const inGame = game && (state === "play" || state === "countdown");
+  const P = inGame ? game.player : null;
+  const spectating = inGame && !P.alive;
 
-  if (inGame) {
-    const P = game.player; const pp = px(P.x, P.y);
-    const vis = metersToPx(game.R.vision);
-    // brouillard au-delà de la vision
+  if (inGame && !spectating) {
+    const pp = px(P.x, P.y); const vis = metersToPx(game.R.vision);
     ctx.save();
     ctx.fillStyle = "rgba(5,7,10,0.55)"; ctx.fillRect(0, 0, W, Hh);
     ctx.globalCompositeOperation = "destination-out";
@@ -768,9 +1354,9 @@ function render(now) {
   ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s.x - 11, s.y); ctx.lineTo(s.x + 11, s.y); ctx.moveTo(s.x, s.y - 11); ctx.lineTo(s.x, s.y + 11); ctx.stroke();
 
   if (!inGame) return;
-  const P = game.player; const pp = px(P.x, P.y);
+  const pp = px(P.x, P.y);
   // chemin prévu
-  if (P.route.length) {
+  if (P.alive && P.route.length) {
     ctx.strokeStyle = COL.sodium; ctx.lineWidth = 3; ctx.lineJoin = "round"; ctx.lineCap = "round";
     ctx.setLineDash([7, 7]); ctx.lineDashOffset = -now / 40;
     ctx.beginPath(); ctx.moveTo(pp.x, pp.y);
@@ -779,7 +1365,6 @@ function render(now) {
     const last = P.route[P.route.length - 1]; const q = px(last.x, last.y);
     ctx.fillStyle = COL.sodium; ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, Math.PI * 2); ctx.fill();
   }
-  // tracé en cours
   if (drawPts && drawPts.length > 1) {
     ctx.strokeStyle = "rgba(244,248,255,0.75)"; ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round";
     ctx.beginPath();
@@ -788,22 +1373,22 @@ function render(now) {
   }
   // anciens nids
   for (const nd of game.nests) {
-    const q = px(G.X[nd], G.Y[nd]);
+    const q = px(nd.x, nd.y);
     ctx.strokeStyle = "rgba(229,72,77,0.45)"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(q.x - 6, q.y - 6); ctx.lineTo(q.x + 6, q.y + 6); ctx.moveTo(q.x + 6, q.y - 6); ctx.lineTo(q.x - 6, q.y + 6); ctx.stroke();
   }
-  // vague annoncée : cercle qui se resserre + compte à rebours, flèche au bord si hors écran
+  // vague annoncée
   if (game.upcoming && game.wave > 0) {
     const left = Math.max(0, game.upcoming.at - game.t);
-    for (const nd of game.upcoming.nodes) {
-      const q = px(G.X[nd], G.Y[nd]);
-      const k = left / CFG.waveWarn;
+    for (const pt of game.upcoming.pts) {
+      const q = px(pt.x, pt.y);
+      const k = Math.min(1, left / CFG.waveWarn);
       ctx.strokeStyle = COL.blood; ctx.lineWidth = 3; ctx.globalAlpha = 0.9;
       ctx.beginPath(); ctx.arc(q.x, q.y, 12 + 40 * k, 0, Math.PI * 2); ctx.stroke();
       ctx.globalAlpha = 1; ctx.fillStyle = COL.blood; ctx.beginPath(); ctx.arc(q.x, q.y, 6, 0, Math.PI * 2); ctx.fill();
       ctx.font = "700 14px 'JetBrains Mono', monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#fff";
       ctx.fillText(String(Math.ceil(left)), q.x, q.y - 20 - 40 * k);
-      const mx = 40, my = 100; // marges : on évite le HUD en haut et la barre d'endurance en bas
+      const mx = 40, my = 100;
       if (q.x < mx || q.y < my || q.x > W - mx || q.y > Hh - my) {
         const cx = W / 2, cy = Hh / 2, dx = q.x - cx, dy = q.y - cy;
         const t = Math.min((W / 2 - mx) / Math.abs(dx || 1e-6), (Hh / 2 - my) / Math.abs(dy || 1e-6));
@@ -815,11 +1400,11 @@ function render(now) {
       }
     }
   }
-  // zombies (seulement dans le champ de vision)
+  // zombies : dans mon champ de vision (tous si je suis éliminé)
   const vm = game.R.vision; const zr = Math.max(4, Math.min(8, metersToPx(4)));
   for (const z of game.zombies) {
-    const d = hyp(z.x, z.y, P.x, P.y); if (d > vm) continue;
-    const a = Math.min(1, (vm - d) / (vm * 0.2));
+    const d = hyp(z.x, z.y, P.x, P.y); if (!spectating && d > vm) continue;
+    const a = spectating ? 1 : Math.min(1, (vm - d) / (vm * 0.2));
     const wob = Math.sin(now / 140 + z.wob) * 0.8;
     const q = px(z.x + z.ox + wob, z.y + z.oy);
     ctx.globalAlpha = a;
@@ -828,14 +1413,33 @@ function render(now) {
     ctx.beginPath(); ctx.arc(q.x, q.y, zr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   }
   ctx.globalAlpha = 1;
-  // joueur
-  const r = 7;
+  // autres joueurs
+  ctx.font = "600 12px 'Barlow Condensed', 'Arial Narrow', sans-serif"; ctx.textAlign = "center";
+  for (const q of players.values()) {
+    if (q.id === myId) continue;
+    const o = px(q.x, q.y);
+    if (q.alive) {
+      ctx.fillStyle = q.color; ctx.strokeStyle = "#0b0f14"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(o.x, o.y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    } else {
+      ctx.strokeStyle = "rgba(138,153,168,0.8)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(o.x - 5, o.y - 5); ctx.lineTo(o.x + 5, o.y + 5); ctx.moveTo(o.x + 5, o.y - 5); ctx.lineTo(o.x - 5, o.y + 5); ctx.stroke();
+    }
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(11,15,20,0.9)"; ctx.strokeText(q.name, o.x, o.y - 11);
+    ctx.fillStyle = q.alive ? q.color : "rgba(138,153,168,0.9)"; ctx.fillText(q.name, o.x, o.y - 11);
+  }
+  // moi
+  if (!P.alive) {
+    ctx.strokeStyle = COL.blood; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(pp.x - 7, pp.y - 7); ctx.lineTo(pp.x + 7, pp.y + 7); ctx.moveTo(pp.x + 7, pp.y - 7); ctx.lineTo(pp.x - 7, pp.y + 7); ctx.stroke();
+    return;
+  }
+  const r = 7; const myColor = (me() && me().color) || COL.sodium;
   if (game.sprinting) { ctx.fillStyle = "rgba(255,173,66,0.3)"; ctx.beginPath(); ctx.arc(pp.x, pp.y, r * 2.4, 0, Math.PI * 2); ctx.fill(); }
-  ctx.fillStyle = COL.runner; ctx.strokeStyle = COL.sodium; ctx.lineWidth = 3;
+  ctx.fillStyle = COL.runner; ctx.strokeStyle = myColor; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.arc(pp.x, pp.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  // direction
   const dx = Math.cos(P.dir), dy = -Math.sin(P.dir);
-  ctx.fillStyle = COL.sodium; ctx.beginPath();
+  ctx.fillStyle = myColor; ctx.beginPath();
   ctx.moveTo(pp.x + dx * (r + 9), pp.y + dy * (r + 9));
   ctx.lineTo(pp.x + dx * (r + 2) - dy * 5, pp.y + dy * (r + 2) + dx * 5);
   ctx.lineTo(pp.x + dx * (r + 2) + dy * 5, pp.y + dy * (r + 2) - dx * 5);
@@ -853,27 +1457,29 @@ function banner(text, danger, ms) {
 function flash() { const f = $("flash"); f.style.opacity = 1; setTimeout(() => (f.style.opacity = 0), 260); }
 function updateHud() {
   const gm = game, P = gm.player;
-  $("hTime").textContent = fmtTime(gm.t);
+  $("hTime").textContent = fmtTime(P.alive ? gm.t : (me() ? me().time : gm.t));
   $("hWave").textContent = gm.wave ? String(gm.wave) : "–";
   $("hZomb").textContent = String(gm.zombies.length);
   $("hDist").textContent = fmtDist(P.trail);
+  $("hAliveRow").hidden = !net; $("hAliveK").hidden = !net;
+  if (net) { const all = [...players.values()]; $("hAlive").textContent = `${all.filter((q) => q.alive).length} / ${all.length}`; }
   const ratio = P.stamina / gm.R.stamina;
   const fill = $("hStam"); fill.style.transform = `scaleX(${ratio})`; fill.classList.toggle("low", ratio < 0.25);
   const lbl = $("hStamLbl"); lbl.classList.toggle("on", !!gm.sprinting);
-  lbl.textContent = gm.sprinting ? "Sprint" : (ratio < 0.02 ? "À bout de souffle" : "Endurance · Espace pour sprinter");
+  lbl.textContent = !P.alive ? "Éliminé" : gm.sprinting ? "Sprint" : (ratio < 0.02 ? "À bout de souffle" : "Endurance · Espace pour sprinter");
   let near = Infinity; for (const z of gm.zombies) near = Math.min(near, hyp(z.x, z.y, P.x, P.y));
   const th = $("threat");
-  if (near <= gm.R.vision) { th.hidden = false; th.textContent = `Zombie à ${Math.round(near)} m`; } else th.hidden = true;
+  if (P.alive && near <= gm.R.vision) { th.hidden = false; th.textContent = `Zombie à ${Math.round(near)} m`; } else th.hidden = true;
 }
 
 /* ---------------- Boucle ---------------- */
 let last = performance.now();
 function frame(now) {
   let dt = (now - last) / 1000; last = now;
-  if (dt > 0.25) dt = 0.016; // onglet en arrière-plan : on ne saute pas dans le temps
+  if (dt > 0.25) dt = 0.016;
   if (state === "play" && game) {
     const steps = Math.ceil(dt / 0.02); for (let i = 0; i < steps && state === "play"; i++) update(dt / steps);
-    if (state === "play") { followCam(); updateHud(); }
+    if (state === "play") { if (game.player.alive) followCam(); updateHud(); }
   }
   render(now);
   requestAnimationFrame(frame);
@@ -884,12 +1490,19 @@ function followCam() {
   if (Math.abs(c.x - m.x) > 1 || Math.abs(c.y - m.y) > 1) map.setView(ll, map.getZoom(), { animate: false });
 }
 requestAnimationFrame(frame);
+// Un onglet en arrière-plan ralentit requestAnimationFrame : l'hôte continue la simulation au minimum 10 fois par seconde.
+let lastTick = performance.now();
+setInterval(() => {
+  const now = performance.now();
+  if (document.hidden && isHost && state === "play" && game) { const dt = Math.min(0.25, (now - lastTick) / 1000); update(dt); }
+  lastTick = now;
+}, 100);
 
 /* ---------------- Entrées ---------------- */
 let suppressClick = 0;
 map.on("click", (e) => {
-  if (state === "pick") { setPick(e.latlng); return; }
-  if (state !== "play") return;
+  if (state === "lobby" && isHost) { setPick(e.latlng); return; }
+  if (state !== "play" || !game.player.alive) return;
   if (performance.now() < suppressClick || (e.originalEvent && e.originalEvent.shiftKey)) return;
   goTo(e.latlng);
 });
@@ -899,7 +1512,7 @@ function goTo(ll) {
 }
 const mapEl = map.getContainer();
 mapEl.addEventListener("mousedown", (e) => {
-  if (state !== "play" || !e.shiftKey || e.button !== 0) return;
+  if (state !== "play" || !game.player.alive || !e.shiftKey || e.button !== 0) return;
   e.preventDefault(); e.stopPropagation();
   drawPts = [map.mouseEventToLatLng(e)];
 }, true);
@@ -912,11 +1525,10 @@ window.addEventListener("mousemove", (e) => {
 window.addEventListener("mouseup", () => {
   if (!drawPts) return;
   const pts = drawPts; drawPts = null; suppressClick = performance.now() + 250;
-  if (state !== "play") return;
+  if (state !== "play" || !game.player.alive) return;
   if (pts.length < 2) { goTo(pts[0]); return; }
   followDrawn(pts);
 });
-// Recolle le dessin aux rues : échantillonne le trait, aimante chaque point, relie par le plus court chemin
 function followDrawn(pts) {
   const xy = pts.map(toXY);
   const samples = [xy[0]]; let acc = 0; const STEP = 22;
@@ -936,13 +1548,11 @@ function followDrawn(pts) {
   if (!snapped.length) return;
   let from = { x: game.player.x, y: game.player.y, a: game.player.a, b: game.player.b };
   const all = [];
-  for (const T of snapped) {
-    const r = route(from, T); if (!r) continue;
-    all.push(...r); from = T;
-  }
+  for (const T of snapped) { const r = route(from, T); if (!r) continue; all.push(...r); from = T; }
   if (all.length) game.player.route = all;
 }
 window.addEventListener("keydown", (e) => {
+  if (e.target && e.target.tagName === "INPUT") return;
   if (e.key === "Shift" && state === "play") mapEl.classList.add("drawing");
   if (e.code === "Space" && state === "play") { e.preventDefault(); game.sprint = true; }
 });
@@ -955,10 +1565,11 @@ const sb = $("sprintBtn");
 sb.addEventListener("pointerdown", (e) => { e.preventDefault(); if (game) game.sprint = true; });
 ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => sb.addEventListener(ev, () => { if (game) game.sprint = false; }));
 
-/* ---------------- Préparation ---------------- */
+/* ---------------- Choix du lieu (hôte) ---------------- */
 function showStep(id) {
-  for (const s of ["stepKey", "stepPlace", "stepRole", "stepOver"]) $(s).hidden = s !== id;
+  for (const s of ["stepKey", "stepMenu", "stepLobby", "stepLoad", "stepRole", "stepOver"]) $(s).hidden = s !== id;
   $("tagline").hidden = id === "stepOver";
+  renderPlayers();
 }
 function radius() { return +document.querySelector('input[name="radius"]:checked').value; }
 function setPick(ll) {
@@ -969,30 +1580,30 @@ function setPick(ll) {
   $("pickInfo").innerHTML = `Point zéro : <b>${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}</b>`;
   $("loadBtn").disabled = false;
   if (map.getZoom() < 14) map.setView(ll, 15);
+  zoneChanged();
 }
 function drawZone() {
   if (!picked) return;
   if (zoneCircle) zoneCircle.remove();
   zoneCircle = L.circle([picked.lat, picked.lon], { radius: radius(), color: css("--sodium"), weight: 1.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
 }
-document.querySelectorAll('input[name="radius"]').forEach((r) => r.addEventListener("change", drawZone));
-
+document.querySelectorAll('input[name="radius"]').forEach((r) => r.addEventListener("change", () => { drawZone(); zoneChanged(); }));
+$("withPaths").addEventListener("change", zoneChanged);
 $("searchForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const q = $("searchInput").value.trim(); if (!q) return;
-  status("Recherche…");
+  zstatus("Recherche…");
   try {
     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, { headers: { "Accept-Language": "fr" } });
     const j = await res.json();
-    if (!j.length) { status("Aucun lieu trouvé pour cette recherche.", "err"); return; }
+    if (!j.length) { zstatus("Aucun lieu trouvé pour cette recherche.", "err"); return; }
     const ll = L.latLng(+j[0].lat, +j[0].lon); map.setView(ll, 16); setPick(ll);
-    status(j[0].display_name.split(",").slice(0, 3).join(","));
-  } catch { status("La recherche ne répond pas. Clique directement sur la carte.", "err"); }
+    zstatus(j[0].display_name.split(",").slice(0, 3).join(","));
+  } catch { zstatus("La recherche ne répond pas. Clique directement sur la carte.", "err"); }
 });
-function status(t, cls) { const s = $("loadStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); }
+function zstatus(t, cls) { const s = $("zoneStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); }
 
-// La zone est découpée en secteurs carrés, chargés deux par deux (un serveur différent pour chacun).
-// Chaque secteur s'affiche dès qu'il arrive ; les rues à cheval sur deux secteurs sont fusionnées.
+/* ---------------- Chargement des rues par secteurs ---------------- */
 function makeCells(lat, lon, r) {
   const size = r <= 800 ? 800 : r <= 1500 ? 1000 : 1250;
   const n = Math.ceil((2 * r) / size), half = (n * size) / 2;
@@ -1001,10 +1612,10 @@ function makeCells(lat, lon, r) {
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const x0 = -half + i * size, y0 = -half + j * size, x1 = x0 + size, y1 = y0 + size;
     const cx = Math.max(x0, Math.min(0, x1)), cy = Math.max(y0, Math.min(0, y1));
-    if (Math.hypot(cx, cy) > r) continue; // garde les secteurs qui touchent le cercle
+    if (Math.hypot(cx, cy) > r) continue;
     cells.push({ s: lat + y0 / ky, n: lat + y1 / ky, w: lon + x0 / kx, e: lon + x1 / kx, st: "wait", d: Math.hypot(x0 + size / 2, y0 + size / 2) });
   }
-  cells.sort((a, b) => a.d - b.d); // du centre vers l'extérieur
+  cells.sort((a, b) => a.d - b.d);
   return cells;
 }
 async function fetchRoads(cells, onCell) {
@@ -1028,7 +1639,7 @@ async function fetchRoads(cells, onCell) {
       } catch (err) {
         if (aborted) throw new DOMException("Annulé", "AbortError");
         lastErr = err;
-        await new Promise((r) => setTimeout(r, 1200 * (attempt + 1))); // serveur saturé : on patiente un peu
+        await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
       } finally { clearTimeout(to); ctls.delete(ctl); }
     }
     throw lastErr;
@@ -1046,9 +1657,11 @@ async function fetchRoads(cells, onCell) {
   };
   try { await Promise.all([worker(0), worker(1)]); }
   catch (err) { loadCtl.abort(); throw err; }
-  return { elements: [...nodes.values(), ...ways.values()] };
+  // ordre stable : mêmes données => même graphe chez tous les joueurs
+  const byId = (a, b) => a.id - b.id;
+  return { elements: [...[...nodes.values()].sort(byId), ...[...ways.values()].sort(byId)] };
 }
-let loadCtl = null, loading = null; // loading : {t0, cells, preview}
+let loadCtl = null, loading = null;
 const mo = (b) => b < 1e6 ? `${Math.max(1, Math.round(b / 1024))} Ko` : `${(b / 1e6).toFixed(1).replace(".", ",")} Mo`;
 function onCell(c, bytes) {
   if (!loading) return;
@@ -1056,8 +1669,8 @@ function onCell(c, bytes) {
   $("lFill").style.transform = `scaleX(${done / N})`;
   $("lPhase").textContent = `Secteurs chargés : ${done} / ${N}`;
   $("lHint").textContent = `${mo(bytes)} reçus${c.server ? ` · serveur ${c.server}` : ""}`;
+  reportProgress(done, N, false);
   if (c.st === "done" && c.data) {
-    // aperçu immédiat des rues du secteur
     const pts = new Map(); for (const el of c.data.elements) if (el.type === "node") pts.set(el.id, [el.lat, el.lon]);
     const lines = [];
     for (const el of c.data.elements) if (el.type === "way") { const l = el.nodes.map((id) => pts.get(id)).filter(Boolean); if (l.length > 1) lines.push(l); }
@@ -1070,55 +1683,7 @@ function hideLoader() {
   if (loading) { clearInterval(loading.timer); loading.preview.remove(); }
   loading = null;
 }
-$("loadBtn").addEventListener("click", async () => {
-  if (!picked || loading) return;
-  $("loadBtn").disabled = true; $("fakeBtn").hidden = true; status("");
-  if (zoneCircle) map.fitBounds(zoneCircle.getBounds(), { paddingTopLeft: [window.innerWidth > 640 ? 400 : 0, 0] });
-  const cells = makeCells(picked.lat, picked.lon, radius());
-  loading = { t0: performance.now(), cells, preview: L.layerGroup().addTo(map) };
-  loading.timer = setInterval(() => {
-    if (!loading) return;
-    const sec = (performance.now() - loading.t0) / 1000;
-    $("lTime").textContent = `${Math.floor(sec)} s`;
-    if (sec > 20) $("lSlow").hidden = false;
-  }, 200);
-  $("lSlow").hidden = true; $("lTime").textContent = "0 s"; $("loader").hidden = false;
-  $("lFill").style.transform = "scaleX(0)"; $("lPhase").textContent = `Secteurs chargés : 0 / ${cells.length}`; $("lHint").textContent = "Connexion aux serveurs OpenStreetMap…";
-  try {
-    const data = await fetchRoads(cells, onCell);
-    $("lPhase").textContent = "Construction du réseau de rues…";
-    await new Promise((r) => setTimeout(r, 40)); // laisse le navigateur afficher l'étape avant le calcul
-    useGraph(data, false);
-    hideLoader();
-  } catch (err) {
-    hideLoader();
-    if (err && err.name === "AbortError") status("Chargement annulé.");
-    else { status("Impossible de récupérer toutes les rues (serveurs saturés ou hors ligne). Réessaie, choisis une zone plus petite, ou joue sur une ville générée.", "err"); $("fakeBtn").hidden = false; }
-  } finally { $("loadBtn").disabled = false; }
-});
-$("cancelBtn").addEventListener("click", () => { if (loadCtl) loadCtl.abort(); });
-$("fakeBtn").addEventListener("click", () => {
-  if (!picked) { const c = map.getCenter(); setPick(c); }
-  useGraph(fakeCity(picked.lat, picked.lon, radius()), true);
-});
-function useGraph(data, generated) {
-  const g = buildGraph(data, picked.lat, picked.lon, $("withPaths").checked);
-  if (!g || g.N < 20) { status("Pas assez de rues ici. Choisis un point plus proche d'une zone habitée.", "err"); return; }
-  G = g;
-  if (roadsLayer) roadsLayer.remove();
-  // Le réseau jouable est dessiné par-dessus la carte : rues en trait plein, chemins piétons et allées en pointillés.
-  const toLine = (w) => w.nodes.map((n) => toLL(G.X[n], G.Y[n]));
-  roadsLayer = L.layerGroup([
-    L.polyline(G.ways.filter((w) => !w.minor).map(toLine), { color: css("--sodium"), opacity: generated ? 0.55 : 0.45, weight: generated ? 3 : 2.5, interactive: false }),
-    L.polyline(G.ways.filter((w) => w.minor).map(toLine), { color: css("--sodium"), opacity: 0.6, weight: 1.6, dashArray: "3 5", interactive: false }),
-  ]).addTo(map);
-  if (pickMarker) { pickMarker.remove(); pickMarker = null; }
-  const total = G.EA.length;
-  status(`${G.N.toLocaleString("fr-FR")} carrefours et ${total.toLocaleString("fr-FR")} tronçons chargés${generated ? " (ville générée)" : ""}.`, "good");
-  map.setView(toLL(G.X[G.spawn], G.Y[G.spawn]), 16);
-  state = "role"; showStep("stepRole");
-}
-// Ville de secours, générée (si Overpass ne répond pas)
+// Ville de secours, générée (identique chez tous les joueurs)
 function fakeCity(lat0, lon0, R) {
   let seed = 1234567; const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
   const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110574;
@@ -1137,16 +1702,17 @@ function fakeCity(lat0, lon0, R) {
   return { elements: els };
 }
 
+/* ---------------- Départ, fin ---------------- */
 function startCountdown() {
-  const roleKey = document.querySelector('input[name="role"]:checked').value;
-  newGame(roleKey);
-  $("panel").hidden = true; $("hud").hidden = false; $("hRole").textContent = ROLES[roleKey].name;
+  if (!G) return;
+  newGame();
+  $("panel").hidden = true; $("hud").hidden = false; $("hRole").textContent = game.R.name;
   $("banner").hidden = true; $("threat").hidden = true;
   if (zoneCircle) zoneCircle.remove();
-  zoneCircle = L.circle([picked.lat, picked.lon], { radius: radius(), color: css("--blood"), weight: 1.5, opacity: 0.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
+  zoneCircle = L.circle([zone.lat, zone.lon], { radius: zone.r, color: css("--blood"), weight: 1.5, opacity: 0.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
   map.dragging.disable(); map.doubleClickZoom.disable();
   map.setView(toLL(game.player.x, game.player.y), CFG.playZoom, { animate: false });
-  updateHud();
+  updateHud(); renderPlayers();
   state = "countdown";
   const cd = $("countdown"); const seq = ["3", "2", "1", "GO"]; let i = 0;
   const tick = () => {
@@ -1157,43 +1723,57 @@ function startCountdown() {
   };
   tick();
 }
-function gameOver() {
-  state = "over"; flash();
-  game.sprint = false; drawPts = null;
+function showResults(results, wave) {
+  state = "over"; if (game) { game.sprint = false; } drawPts = null;
   map.dragging.enable(); map.doubleClickZoom.enable();
-  $("banner").hidden = true; $("threat").hidden = true; $("hud").hidden = true;
-  $("rTime").textContent = fmtTime(game.t); $("rDist").textContent = fmtDist(game.player.trail);
-  $("rWave").textContent = String(game.wave); $("rZomb").textContent = String(game.zombies.length);
+  $("banner").hidden = true; $("threat").hidden = true; $("hud").hidden = true; $("countdown").innerHTML = "";
+  const mine = results.find((r) => r.id === myId) || results[0];
+  const won = net && results.length > 1 && results[0].id === myId;
+  $("overTitle").textContent = won ? "Dernier survivant" : "Rattrapé";
+  $("overTitle").classList.toggle("win", !!won);
+  $("rTime").textContent = fmtTime(mine.time); $("rDist").textContent = fmtDist(mine.trail);
+  $("rWave").textContent = String(wave); $("rZomb").textContent = String(game ? game.zombies.length : 0);
+  const ol = $("ranking"); ol.innerHTML = ""; ol.hidden = !net;
+  results.forEach((r, i) => {
+    const li = document.createElement("li"); if (r.id === myId) li.className = "me";
+    li.innerHTML = `<span class="rk">${i + 1}</span><span class="pdot" style="background:${r.color}"></span><span class="pname">${r.name}</span><span class="rrole">${ROLES[r.role] ? ROLES[r.role].name : ""}</span><span class="rt">${fmtTime(r.time)}</span>`;
+    ol.appendChild(li);
+  });
   let best = 0; try { best = +localStorage.getItem("deadends.best") || 0; } catch {}
   const rb = $("rBest");
-  if (game.t > best) { try { localStorage.setItem("deadends.best", String(game.t)); } catch {} rb.textContent = "Nouveau record de survie."; rb.className = "best new"; }
-  else { rb.textContent = `Record : ${fmtTime(best)}`; rb.className = "best"; }
+  if (mine.time > best) { try { localStorage.setItem("deadends.best", String(mine.time)); } catch {} rb.textContent = "Nouveau record personnel de survie."; rb.className = "best new"; }
+  else { rb.textContent = `Ton record : ${fmtTime(best)}`; rb.className = "best"; }
+  $("againBtn").hidden = !isHost; $("elsewhereBtn").hidden = !isHost; $("overWait").hidden = isHost;
   $("panel").hidden = false; showStep("stepOver");
 }
-$("readyBtn").addEventListener("click", startCountdown);
-$("againBtn").addEventListener("click", () => { state = "role"; game = null; showStep("stepRole"); drawZone(); });
-function backToPick() {
-  state = "pick"; game = null; G = null;
-  if (roadsLayer) { roadsLayer.remove(); roadsLayer = null; }
-  if (picked) setPick(L.latLng(picked.lat, picked.lon));
-  status(""); $("fakeBtn").hidden = true; showStep("stepPlace");
-}
-$("backBtn").addEventListener("click", backToPick);
-$("elsewhereBtn").addEventListener("click", backToPick);
+
+/* ---------------- Boutons ---------------- */
+$("createBtn").addEventListener("click", startHost);
+$("soloBtn").addEventListener("click", startSolo);
+$("joinForm").addEventListener("submit", (e) => { e.preventDefault(); startJoin($("codeInput").value); });
+$("leaveBtn").addEventListener("click", () => { leaving = true; goMenu(); leaving = false; });
+$("loadBtn").addEventListener("click", () => { if (picked && !loading) hostStartLoad(false); });
+$("cancelBtn").addEventListener("click", () => { if (loadCtl) loadCtl.abort(); });
+$("retryBtn").addEventListener("click", () => { const p = me(); if (p) { p.failed = false; } if (isHost) pushLobby(); startLoading(); });
+$("fakeBtn").addEventListener("click", () => hostStartLoad(true));
+$("readyBtn").addEventListener("click", toggleReady);
+$("launchBtn").addEventListener("click", hostLaunch);
+$("backBtn").addEventListener("click", () => { if (isHost) enterLobby(); });
+$("againBtn").addEventListener("click", () => { if (!isHost) return; broadcast({ t: "role" }); enterRole(); });
+$("elsewhereBtn").addEventListener("click", () => { if (isHost) enterLobby(); });
+$("nameInput").addEventListener("change", saveName);
 document.fonts && document.fonts.ready.then(readColors);
 
 /* ---------------- Clé CARTO ---------------- */
-function keyStatus(t, cls) { const s = $("keyStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); if (state === "pick" && cls === "err") askKey(); }
+function keyStatus(t, cls) { const s = $("keyStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); if (state === "menu" && cls === "err") askKey(); }
 function maskKey(k) { return k.length > 6 ? "••••" + k.slice(-4) : "••••"; }
-function askKey() {
-  state = "key"; showStep("stepKey"); $("keyInput").value = cartoKey; $("keyInput").focus();
-}
+function askKey() { state = "key"; showStep("stepKey"); $("keyInput").value = cartoKey; $("keyInput").focus(); }
 function acceptKey(k) {
   cartoKey = k; try { localStorage.setItem(KEY_STORE, k); } catch {}
   setBaseMap(k);
   $("keyInfo").innerHTML = `Clé CARTO : <b>${maskKey(k)}</b>`;
   keyStatus("");
-  state = "pick"; showStep("stepPlace");
+  goMenu();
 }
 $("keyForm").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -1202,10 +1782,8 @@ $("keyForm").addEventListener("submit", (e) => {
   acceptKey(k);
 });
 $("changeKeyBtn").addEventListener("click", askKey);
-// Guide : texte à copier, domaine du site pour la restriction, bouton Coller
-if (/^https?:$/.test(location.protocol) && location.hostname) {
-  $("refText").textContent = location.hostname;
-} else { $("refLabel").hidden = true; $("refRow").hidden = true; }
+if (/^https?:$/.test(location.protocol) && location.hostname) $("refText").textContent = location.hostname;
+else { $("refLabel").hidden = true; $("refRow").hidden = true; }
 document.querySelectorAll(".copy").forEach((btn) => btn.addEventListener("click", async () => {
   const el = $(btn.dataset.copy); const txt = el.textContent;
   try { await navigator.clipboard.writeText(txt); btn.textContent = "Copié"; btn.classList.add("done"); setTimeout(() => { btn.textContent = "Copier"; btn.classList.remove("done"); }, 1500); }
@@ -1218,7 +1796,10 @@ $("pasteBtn").addEventListener("click", async () => {
 if (cartoKey) acceptKey(cartoKey); else askKey();
 
 // Accès pour le débogage depuis la console
-window.PZ = { get G() { return G; }, get game() { return game; }, get state() { return state; }, CFG, ROLES, route, snap, computeField, followDrawn, toLL };
+window.PZ = {
+  get G() { return G; }, get game() { return game; }, get state() { return state; }, get players() { return players; },
+  get net() { return net; }, get myId() { return myId; }, CFG, ROLES, route, snap, computeField, followDrawn, toLL, fakeCity,
+};
 </script>
 </body>
 </html>
