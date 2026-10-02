@@ -151,6 +151,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .stats .k { font: 600 11px/1.6 var(--f-label); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
 .stats .v { font: 700 15px/1.4 var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; }
 .stats .v.big { font-size: 22px; color: var(--sodium); }
+.stats .detect { grid-column: 1 / -1; margin-top: 6px; padding: 5px 8px; border-radius: 3px; font: 700 11px/1.2 var(--f-label); text-transform: uppercase; letter-spacing: .1em; text-align: center; background: #16202b; color: var(--muted); }
+.stats .detect.on { background: rgba(120,20,24,.9); color: #fff; }
+.stats .detect.pop { animation: detectPop .5s ease-out; }
+@keyframes detectPop { 0% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .stats .detect.pop { animation: none; } }
 .stats .role-tag { grid-column: 1 / -1; font: 700 12px/1 var(--f-label); text-transform: uppercase; letter-spacing: .12em; color: var(--sodium); padding-bottom: 6px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
 #banner {
   position: absolute; top: 16px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px);
@@ -442,6 +447,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     <span class="k">Zombies</span><span class="v" id="hZomb">0</span>
     <span class="k" id="hAliveK">En vie</span><span class="v" id="hAliveRow"><span id="hAlive">1 / 1</span></span>
     <span class="k">Distance</span><span class="v" id="hDist">0 m</span>
+    <span class="detect" id="hDetect">Discret</span>
   </div>
   <div id="banner" hidden></div>
   <div id="threat" hidden></div>
@@ -452,7 +458,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   <div class="help">
     <span><kbd>Clic</kbd> courir vers un point</span>
     <span><kbd>Shift</kbd> + glisser : tracer ton chemin</span>
-    <span><kbd>Espace</kbd> sprint</span>
+    <span><kbd>Espace</kbd> sprint (bruyant)</span>
   </div>
   <button id="sprintBtn" aria-label="Sprint">Sprint</button>
 </div>
@@ -534,6 +540,17 @@ const CFG = {
   catchDist: 7,         // m
   vision: 170,          // m
   fieldEvery: 0.25,     // s entre deux recalculs du champ de poursuite
+  // IA des zombies
+  senseR: 220,          // m : distance à laquelle un zombie te repère
+  senseSprint: 420,     // m : en sprint, tu fais du bruit et on te repère de plus loin
+  alertTime: 4,         // s : quand un zombie te repère, il hurle et alerte la horde
+  alertMul: 1.8,        //     pendant ce temps, les zombies te repèrent de 1,8 fois plus loin
+  scentEvery: 4,        // s : les zombies qui ne te voient pas suivent ta piste, mise à jour toutes les 4 s
+  scentSprint: 1.5,     //     (toutes les 1,5 s si tu sprintes)
+  flankFrom: 2,         // à partir de cette vague, une partie des zombies sont des rabatteurs
+  flankShare: 0.35,     // proportion de rabatteurs
+  flankClose: 90,       // m : sous cette distance, un rabatteur fonce droit sur toi
+  aheadDist: 160,       // m : un rabatteur vise le carrefour vers lequel tu cours, jusqu'à cette distance devant toi
   playZoom: 17,
 };
 const ROLES = {
@@ -656,6 +673,8 @@ function buildGraph(data, lat0, lon0, withPaths = true) {
   // stamps pour la recherche de chemin
   g.gArr = new Float64Array(N); g.gStamp = new Int32Array(N); g.closed = new Int32Array(N); g.prev = new Int32Array(N); g.stamp = 0;
   g.dist = new Float64Array(N); g.next = new Int32Array(N); g.owner = new Int16Array(N);
+  const mkField = () => ({ dist: new Float64Array(N), next: new Int32Array(N), owner: new Int16Array(N) });
+  g.F2 = mkField(); g.F3 = mkField(); // champ « piste » (dernières positions connues) et champ « rabatteurs » (carrefours devant les joueurs)
   return g;
 }
 const CELL = 40;
@@ -736,8 +755,8 @@ function route(S, T) {
 // Champ de poursuite : distance de chaque carrefour au joueur + prochain carrefour à prendre
 // Champ de poursuite : distance de chaque carrefour au joueur le plus proche (plusieurs sources),
 // prochain carrefour à prendre, et joueur visé (owner = index dans la liste des cibles)
-function computeField(srcs) {
-  const g = G; const dist = g.dist, next = g.next, owner = g.owner; dist.fill(Infinity); next.fill(-1); owner.fill(-1);
+function computeField(srcs, F) {
+  const g = G; F = F || g; const dist = F.dist, next = F.next, owner = F.owner; dist.fill(Infinity); next.fill(-1); owner.fill(-1);
   const H = new Heap();
   const seed = (n, i, P) => { const d = hyp(P.x, P.y, g.X[n], g.Y[n]); if (d < dist[n]) { dist[n] = d; next[n] = -1; owner[n] = i; H.push(d, n); } };
   srcs.forEach((P, i) => { seed(P.a, i, P); if (P.b !== P.a) seed(P.b, i, P); });
@@ -802,26 +821,38 @@ const makeCode = () => { const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let s = "
 const cleanName = (n) => (String(n || "").replace(/[<>&"]/g, "").trim().slice(0, 16) || "Joueur");
 
 /* ---------------- Transport : PeerJS (internet) ou BroadcastChannel (test local) ---------------- */
+// PeerJS (sérialisation JSON) refuse tout message de 16 300 octets ou plus : il signale une erreur
+// au lieu de l'envoyer. On vérifie donc la taille avant chaque envoi, sur tous les transports
+// (y compris le mode de test local, pour que les tests reflètent la vraie limite).
+const MSG_MAX = 15500;
+const PEER_OPTS = window.DEADENDS_PEER_OPTS || undefined; // serveur de mise en relation personnalisé (tests) ; sinon le serveur public de PeerJS
+const utf8 = new TextEncoder();
+function fits(m) {
+  const s = JSON.stringify(m);
+  if (s.length < MSG_MAX / 3 || utf8.encode(s).length < MSG_MAX) return true;
+  console.warn("Dead Ends : message trop gros, non envoyé", m && m.t, s.length);
+  return false;
+}
 function peerHost(code, ev) {
   return new Promise((resolve, reject) => {
     if (typeof Peer === "undefined") { reject(new Error("nolib")); return; }
-    const peer = new Peer(PEER_PREFIX + code); let open = false;
+    const peer = new Peer(PEER_PREFIX + code, PEER_OPTS); let open = false;
     peer.on("open", () => { open = true; resolve({ close: () => { try { peer.destroy(); } catch {} } }); });
     peer.on("error", (e) => { if (!open) reject(e); else console.warn("PeerJS", e.type); });
     peer.on("disconnected", () => { try { if (!peer.destroyed) peer.reconnect(); } catch {} });
     peer.on("connection", (conn) => {
-      const link = { send: (m) => { try { conn.send(m); } catch {} }, close: () => { try { conn.close(); } catch {} } };
+      const link = { send: (m) => { try { if (fits(m)) conn.send(m); } catch {} }, close: () => { try { conn.close(); } catch {} } };
       conn.on("open", () => ev.onJoin(conn.peer, link));
       conn.on("data", (d) => ev.onData(conn.peer, d));
       conn.on("close", () => ev.onLeave(conn.peer));
-      conn.on("error", () => ev.onLeave(conn.peer));
+      conn.on("error", (e) => console.warn("Connexion joueur", e && e.type, e && e.message));
     });
   });
 }
 function peerJoin(code, ev) {
   return new Promise((resolve, reject) => {
     if (typeof Peer === "undefined") { reject(new Error("nolib")); return; }
-    const peer = new Peer(); let done = false;
+    const peer = PEER_OPTS ? new Peer(PEER_OPTS) : new Peer(); let done = false;
     const fail = (e) => { if (done) return; done = true; clearTimeout(to); try { peer.destroy(); } catch {} reject(e); };
     const to = setTimeout(() => fail(new Error("timeout")), 15000);
     peer.on("error", (e) => { if (!done) fail(e); });
@@ -829,11 +860,11 @@ function peerJoin(code, ev) {
       const conn = peer.connect(PEER_PREFIX + code, { reliable: true, serialization: "json" });
       conn.on("open", () => {
         if (done) return; done = true; clearTimeout(to);
-        resolve({ id, send: (m) => { try { conn.send(m); } catch {} }, close: () => { try { conn.close(); } catch {} try { peer.destroy(); } catch {} } });
+        resolve({ id, send: (m) => { try { if (fits(m)) conn.send(m); } catch {} }, close: () => { try { conn.close(); } catch {} try { peer.destroy(); } catch {} } });
       });
       conn.on("data", (d) => ev.onData(d));
       conn.on("close", () => ev.onClose());
-      conn.on("error", () => ev.onClose());
+      conn.on("error", (e) => console.warn("Connexion à l'hôte", e && e.type, e && e.message));
     });
   });
 }
@@ -844,7 +875,7 @@ function localHost(code, ev) {
     if (m.kind === "hello") {
       if (known.has(m.from)) return; known.add(m.from);
       bc.postMessage({ to: m.from, kind: "welcome" });
-      ev.onJoin(m.from, { send: (d) => bc.postMessage({ to: m.from, kind: "data", d }), close() {} });
+      ev.onJoin(m.from, { send: (d) => { if (fits(d)) bc.postMessage({ to: m.from, kind: "data", d }); }, close() {} });
     } else if (m.kind === "data") ev.onData(m.from, m.d);
     else if (m.kind === "bye") { known.delete(m.from); ev.onLeave(m.from); }
   };
@@ -862,7 +893,7 @@ function localJoin(code, ev) {
       if (m.to !== id) return;
       if (m.kind === "welcome") {
         clearTimeout(to);
-        resolve({ id, send: (d) => bc.postMessage({ to: "host", from: id, kind: "data", d }), close: () => { bc.postMessage({ to: "host", from: id, kind: "bye" }); bc.close(); } });
+        resolve({ id, send: (d) => { if (fits(d)) bc.postMessage({ to: "host", from: id, kind: "data", d }); }, close: () => { bc.postMessage({ to: "host", from: id, kind: "bye" }); bc.close(); } });
       } else if (m.kind === "data") ev.onData(m.d);
     };
     window.addEventListener("beforeunload", () => bc.postMessage({ to: "host", from: id, kind: "bye" }));
@@ -1023,6 +1054,7 @@ function hostOnData(id, m) {
       if (state === "play" && G && p.alive) {
         p.x = +m.x; p.y = +m.y; p.dir = +m.dir || 0; p.trail = +m.trail || 0;
         p.sp = snap(p.x, p.y, 80);
+        p.sprint = !!m.s; p.nx = Array.isArray(m.nx) ? m.nx.filter((n) => Number.isInteger(n) && n >= 0 && n < G.N).slice(0, 4) : [];
       }
       break;
   }
@@ -1238,8 +1270,9 @@ function newGame() {
     upcoming: null,   // vague annoncée : { at, pts: [{x, y}] }
     nests: [],        // anciens points d'apparition [{x, y}]
     targets: [],      // hôte : positions des joueurs en vie (pour la poursuite)
+    alive: [], known: [], ahead: [], huntedMe: 0,
   };
-  for (const q of players.values()) { q.alive = true; q.time = 0; q.x = G.X[s]; q.y = G.Y[s]; q.trail = 0; q.sp = { x: q.x, y: q.y, a: s, b: s }; }
+  for (const q of players.values()) { q.alive = true; q.time = 0; q.x = G.X[s]; q.y = G.Y[s]; q.trail = 0; q.sp = { x: q.x, y: q.y, a: s, b: s }; q.known = null; q.knownT = -99; q.alertUntil = 0; q.sprint = false; q.nx = []; q.hunted = 0; }
 }
 function waveSpeed(k) { return Math.min(CFG.zSpeedMax, CFG.zSpeed + CFG.zSpeedInc * (k - 1)); }
 function spawnZombie(k, s) {
@@ -1248,6 +1281,7 @@ function spawnZombie(k, s) {
     x: G.X[s], y: G.Y[s], a: s, b: s, route: [],
     speed: waveSpeed(k) * (0.9 + Math.random() * 0.2),
     ox: Math.cos(ang) * 3, oy: Math.sin(ang) * 3, wob: Math.random() * 10,
+    role: k >= CFG.flankFrom && Math.random() < CFG.flankShare ? "flank" : "chase", hunt: false, tgt: -1,
   });
 }
 // Points d'apparition : carrefours au hasard, ni trop près ni trop loin du joueur le plus proche (par les rues)
@@ -1273,22 +1307,60 @@ function where(pt) {
   const i = ((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8;
   return `${dirs[i]}, à ${Math.round(Math.hypot(dx, dy) / 10) * 10} m`;
 }
+/* IA des zombies (calculée par l'hôte)
+   - Perception : un zombie ne te repère que dans un rayon limité (plus grand si tu sprintes : ça fait du bruit).
+   - Piste : sinon, il suit ta dernière position connue, rafraîchie toutes les quelques secondes.
+   - Cri : quand un zombie te repère, toute la horde te repère de plus loin pendant quelques secondes.
+   - Rabatteurs : une partie des zombies vise le carrefour vers lequel tu cours, pour te couper la route. */
+function senseFor(q) { return (q.sprint ? CFG.senseSprint : CFG.senseR) * (q.alertUntil > game.t ? CFG.alertMul : 1); }
 function zombieThink(z) {
-  const T = game.targets;
-  for (const P of T) if (sameEdge(z, P)) { z.route = [{ x: P.x, y: P.y, n: -1, ea: P.a, eb: P.b }]; return; }
+  const gm = game, T = gm.targets, A = gm.alive;
+  if (!T.length) { z.route = []; return; }
+  // perception : le joueur le plus proche qu'il perçoit
+  let best = -1, bd = Infinity;
+  for (let i = 0; i < A.length; i++) {
+    const q = A[i]; if (!q.alive) continue;
+    const d = hyp(z.x, z.y, q.x, q.y);
+    if (d < senseFor(q) * (z.hunt && z.tgt === i ? 1.4 : 1) && d < bd) { bd = d; best = i; }
+  }
+  if (best >= 0) {
+    if (!z.hunt || z.tgt !== best) { const q = A[best]; q.alertUntil = gm.t + CFG.alertTime; q.knownT = -99; } // il hurle
+    z.hunt = true; z.tgt = best;
+  } else { z.hunt = false; z.tgt = -1; }
+  // sur la même rue que sa proie : droit dessus
+  if (z.hunt) { const P = T[z.tgt]; if (P && sameEdge(z, P)) { z.route = [{ x: P.x, y: P.y, n: -1, ea: P.a, eb: P.b }]; return; } }
+  // choix du champ à suivre
+  let F = G;
+  if (z.hunt) { if (z.role === "flank" && bd > CFG.flankClose && gm.ahead.length) F = G.F3; }
+  else if (gm.known.length) F = G.F2;
+  step(z, F);
+}
+function step(z, F) {
   if (z.a === z.b) {
-    const nx = G.next[z.a];
+    let nx = F.next[z.a];
+    if (nx < 0 && F !== G) { F = G; nx = G.next[z.a]; } // arrivé au point visé : on reprend la poursuite directe
     if (nx < 0) {
-      const P = T[G.owner[z.a]] || T[0]; if (!P) { z.route = []; return; }
+      const P = game.targets[G.owner[z.a]] || game.targets[0]; if (!P) { z.route = []; return; }
       z.route = [{ x: P.x, y: P.y, n: -1, ea: P.a, eb: P.b }]; return;
     }
     z.route = [{ x: G.X[nx], y: G.Y[nx], n: nx }];
   } else {
-    const da = hyp(z.x, z.y, G.X[z.a], G.Y[z.a]) + G.dist[z.a];
-    const db = hyp(z.x, z.y, G.X[z.b], G.Y[z.b]) + G.dist[z.b];
+    const da = hyp(z.x, z.y, G.X[z.a], G.Y[z.a]) + F.dist[z.a];
+    const db = hyp(z.x, z.y, G.X[z.b], G.Y[z.b]) + F.dist[z.b];
     const t = da < db ? z.a : z.b;
     z.route = [{ x: G.X[t], y: G.Y[t], n: t }];
   }
+}
+// Carrefour vers lequel le joueur court (pour les rabatteurs)
+function aheadOf(q) {
+  const nodes = q.nx || []; if (!nodes.length) return q.sp;
+  let acc = 0, px_ = q.x, py_ = q.y, pick = -1;
+  for (const n of nodes) {
+    acc += hyp(px_, py_, G.X[n], G.Y[n]);
+    if (acc > CFG.aheadDist && pick >= 0) break;
+    pick = n; px_ = G.X[n]; py_ = G.Y[n];
+  }
+  return pick >= 0 ? { x: G.X[pick], y: G.Y[pick], a: pick, b: pick } : q.sp;
 }
 // Mon personnage (chaque joueur le déplace lui-même)
 function moveMe(dt) {
@@ -1305,11 +1377,24 @@ function moveMe(dt) {
 function hostUpdate(dt) {
   const gm = game;
   const mine = me(); const P = gm.player;
-  if (mine.alive) { mine.x = P.x; mine.y = P.y; mine.dir = P.dir; mine.trail = P.trail; mine.sp = { x: P.x, y: P.y, a: P.a, b: P.b }; }
+  if (mine.alive) {
+    mine.x = P.x; mine.y = P.y; mine.dir = P.dir; mine.trail = P.trail; mine.sp = { x: P.x, y: P.y, a: P.a, b: P.b };
+    mine.sprint = !!gm.sprinting; mine.nx = P.route.filter((w) => w.n >= 0).slice(0, 4).map((w) => w.n);
+  }
   const alive = [...players.values()].filter((q) => q.alive && q.sp);
-  // Champ de poursuite depuis tous les joueurs en vie
+  // Piste : dernière position connue de chaque joueur, rafraîchie régulièrement (plus souvent s'il sprinte)
+  let knownDirty = false;
+  for (const q of alive) if (!q.known || gm.t - q.knownT >= (q.sprint ? CFG.scentSprint : CFG.scentEvery)) { q.known = q.sp; q.knownT = gm.t; knownDirty = true; }
+  // Champs de poursuite : direct (positions réelles), piste (positions connues), rabatteurs (carrefours devant)
   gm.fieldT -= dt;
-  if (gm.fieldT <= 0 && alive.length) { gm.targets = alive.map((q) => q.sp); computeField(gm.targets); gm.fieldT = CFG.fieldEvery; }
+  if ((gm.fieldT <= 0 || knownDirty) && alive.length) {
+    const aliveChanged = gm.alive.length !== alive.length || alive.some((q, i) => gm.alive[i] !== q);
+    gm.alive = alive; gm.targets = alive.map((q) => q.sp); computeField(gm.targets);
+    if (knownDirty || aliveChanged) { gm.known = alive.map((q) => q.known); computeField(gm.known, G.F2); } // la piste ne change que toutes les quelques secondes
+    gm.f3 = (gm.f3 || 0) + 1;
+    if (gm.f3 % 2 === 0 || aliveChanged) { gm.ahead = alive.map(aheadOf); computeField(gm.ahead, G.F3); } // rabatteurs : 2 fois par seconde suffit
+    gm.fieldT = CFG.fieldEvery;
+  }
   // Vagues : la 1re sort du point zéro, les suivantes d'endroits aléatoires annoncés à l'avance
   if (!gm.upcoming && gm.t >= gm.nextWave - CFG.waveWarn) {
     const k = gm.wave + 1;
@@ -1336,6 +1421,10 @@ function hostUpdate(dt) {
   for (const q of alive) {
     for (const z of gm.zombies) if (hyp(z.x, z.y, q.x, q.y) < CFG.catchDist) { killPlayer(q); break; }
   }
+  // Combien de zombies traquent chaque joueur (affiché dans le HUD)
+  for (const q of players.values()) q.hunted = 0;
+  for (const z of gm.zombies) if (z.hunt && gm.alive[z.tgt]) gm.alive[z.tgt].hunted++;
+  gm.huntedMe = mine.hunted || 0;
   // État du monde envoyé aux joueurs
   gm.sendT -= dt;
   if (net && gm.sendT <= 0) {
@@ -1343,8 +1432,8 @@ function hostUpdate(dt) {
     const r1 = (v) => Math.round(v * 10) / 10;
     broadcast({
       t: "snap", time: gm.t, w: gm.wave, nw: gm.wave === 0 ? gm.nextWave - gm.t : null,
-      z: gm.zombies.map((z) => [r1(z.x + z.ox), r1(z.y + z.oy)]),
-      p: [...players.values()].map((q) => [q.id, r1(q.x), r1(q.y), Math.round(q.dir * 100) / 100, q.alive ? 1 : 0]),
+      z: gm.zombies.map((z) => [Math.round(z.x + z.ox), Math.round(z.y + z.oy)]),
+      p: [...players.values()].map((q) => [q.id, r1(q.x), r1(q.y), Math.round(q.dir * 100) / 100, q.alive ? 1 : 0, q.hunted || 0]),
       up: gm.upcoming && gm.wave > 0 ? { left: gm.upcoming.at - gm.t, pts: gm.upcoming.pts } : null,
       nests: gm.nests,
     });
@@ -1400,8 +1489,9 @@ function applySnap(m) {
   game.wave = m.w;
   while (game.zombies.length < m.z.length) { const [x, y] = m.z[game.zombies.length]; game.zombies.push({ x, y, tx: x, ty: y, ox: 0, oy: 0, wob: Math.random() * 10 }); }
   m.z.forEach(([x, y], i) => { game.zombies[i].tx = x; game.zombies[i].ty = y; });
-  for (const [id, x, y, dir, alive] of m.p) {
-    const q = players.get(id); if (!q || id === myId) continue;
+  for (const [id, x, y, dir, alive, hunted] of m.p) {
+    if (id === myId) { game.huntedMe = hunted || 0; continue; }
+    const q = players.get(id); if (!q) continue;
     if (q.tx === undefined) { q.x = x; q.y = y; }
     q.tx = x; q.ty = y; q.dir = dir; q.alive = !!alive;
   }
@@ -1415,7 +1505,11 @@ function guestUpdate(dt) {
   for (const z of gm.zombies) { z.x += (z.tx - z.x) * k; z.y += (z.ty - z.y) * k; }
   for (const q of players.values()) if (q.id !== myId && q.tx !== undefined) { q.x += (q.tx - q.x) * k; q.y += (q.ty - q.y) * k; }
   gm.sendT -= dt;
-  if (gm.sendT <= 0 && P.alive) { gm.sendT = 0.1; toHost({ t: "pos", x: Math.round(P.x * 10) / 10, y: Math.round(P.y * 10) / 10, dir: Math.round(P.dir * 100) / 100, trail: Math.round(P.trail) }); }
+  if (gm.sendT <= 0 && P.alive) {
+    gm.sendT = 0.1;
+    toHost({ t: "pos", x: Math.round(P.x * 10) / 10, y: Math.round(P.y * 10) / 10, dir: Math.round(P.dir * 100) / 100, trail: Math.round(P.trail),
+      s: gm.sprinting ? 1 : 0, nx: P.route.filter((w) => w.n >= 0).slice(0, 4).map((w) => w.n) });
+  }
 }
 function update(dt) {
   const gm = game;
@@ -1607,7 +1701,15 @@ function updateHud() {
   const ratio = P.stamina / gm.R.stamina;
   const fill = $("hStam"); fill.style.transform = `scaleX(${ratio})`; fill.classList.toggle("low", ratio < 0.25);
   const lbl = $("hStamLbl"); lbl.classList.toggle("on", !!gm.sprinting);
-  lbl.textContent = !P.alive ? "Éliminé" : gm.sprinting ? "Sprint" : (ratio < 0.02 ? "À bout de souffle" : "Endurance · Espace pour sprinter");
+  lbl.textContent = !P.alive ? "Éliminé" : gm.sprinting ? "Sprint · tu fais du bruit" : (ratio < 0.02 ? "À bout de souffle" : "Endurance · Espace pour sprinter");
+  const det = $("hDetect"), h = gm.huntedMe || 0;
+  det.hidden = !P.alive || !gm.zombies.length;
+  if (h !== gm.lastHunted) {
+    det.textContent = h ? `Repéré · ${h} zombie${h > 1 ? "s" : ""} te traque${h > 1 ? "nt" : ""}` : "Discret · ils suivent ta piste";
+    det.classList.toggle("on", h > 0);
+    if (h > 0 && !(gm.lastHunted > 0)) { det.classList.remove("pop"); void det.offsetWidth; det.classList.add("pop"); }
+    gm.lastHunted = h;
+  }
   let near = Infinity; for (const z of gm.zombies) near = Math.min(near, hyp(z.x, z.y, P.x, P.y));
   const th = $("threat");
   if (P.alive && near <= gm.R.vision) { th.hidden = false; th.textContent = `Zombie à ${Math.round(near)} m`; } else th.hidden = true;
@@ -1821,7 +1923,7 @@ function cellQuery(c) {
    de jeu (compressé en gzip, découpé en morceaux). Un invité l'envoie à l'hôte, qui le relaie à tous.
    Côté réception, le secteur arrive directement en cache : plus besoin de le demander à OpenStreetMap. */
 const sentKeys = new Set(), recvKeys = new Set(), sharedWait = new Map(), partsIn = new Map();
-const CHUNK = 48000;
+const CHUNK = 12000; // caractères base64 par morceau, sous la limite de 16 Ko de PeerJS
 function waitShared(key) {
   let w = sharedWait.get(key);
   if (!w) { let res; const p = new Promise((r) => { res = r; }); w = { p, res }; sharedWait.set(key, w); }
