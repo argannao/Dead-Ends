@@ -94,7 +94,7 @@ function newPlayer(id, name, host) {
 }
 const me = () => players.get(myId);
 function publicPlayers() {
-  return [...players.values()].map((p) => ({ id: p.id, uid: p.id === myId ? cloudUid() : p.uid || null, name: p.name, host: p.host, color: p.color, load: p.load, loaded: p.loaded, failed: p.failed, ready: p.ready, role: p.role, alive: p.alive }));
+  return [...players.values()].map((p) => ({ id: p.id, uid: p.id === myId ? cloudUid() : p.uid || null, name: p.name, host: p.host, color: p.color, load: p.load, loaded: p.loaded, failed: p.failed, ready: p.ready, role: p.role, tpick: p.tpick || "auto", alive: p.alive }));
 }
 // L'hôte envoie à tous ; send() du côté invité va vers l'hôte.
 function broadcast(m) { if (!net || !net.host) return; for (const p of players.values()) if (p.link) p.link.send(m); }
@@ -123,7 +123,7 @@ function renderPlayers() {
       if (p.loaded) { st = "Carte prête"; cls = "ok"; }
       else if (p.failed) { st = "Échec du chargement"; cls = "err"; }
       else st = p.load.n ? `Chargement ${p.load.done} / ${p.load.n}` : "Chargement…";
-    } else if (state === "role") { st = p.ready ? `Prêt · ${ROLES[p.role].name}` : "Choisit son rôle…"; cls = p.ready ? "ok" : ""; }
+    } else if (state === "role") { const tp = teamPickName(p); st = (p.ready ? `Prêt · ${ROLES[p.role].name}` : "Choisit son rôle…") + (tp ? ` · ${tp}` : ""); cls = p.ready ? "ok" : ""; }
     else if (state === "over") { st = ROLES[p.role].name; }
     const pct = state === "loading" && p.load.n ? Math.round((p.load.done / p.load.n) * 100) : (p.loaded ? 100 : 0);
     li.innerHTML = `<span class="pdot" style="background:${p.color}"></span>
@@ -229,7 +229,8 @@ function hostOnData(id, m) {
     case "hello": p.name = cleanName(m.name); p.uid = typeof m.uid === "string" ? m.uid.slice(0, 128) : null; pushLobby(); break;
     case "progress": p.load = { done: +m.done || 0, n: +m.n || 0 }; pushLobby(); break;
     case "loaded": p.loaded = !!m.ok; p.failed = !m.ok; pushLobby(); checkAllLoaded(); break;
-    case "ready": if (state === "role") { p.ready = !!m.ready; p.role = ROLES[m.role] ? m.role : "coureur"; pushLobby(); } break;
+    case "ready": if (state === "role") { p.ready = !!m.ready; p.role = ROLES[m.role] ? m.role : "coureur"; if (typeof m.tpick === "string") p.tpick = m.tpick.slice(0, 8); pushLobby(); } break;
+    case "pick": if (state === "role" && typeof m.tpick === "string") { p.tpick = m.tpick.slice(0, 8); pushLobby(); } break;
     case "cell": receiveCellPart(m, id); break;
     case "skill": hostSkill(id, m); break;
     case "rally": if (state === "play") hostRally(id, m); break;
@@ -257,6 +258,7 @@ function guestOnData(m) {
       const prev = players; players = new Map();
       for (const q of m.players) players.set(q.id, Object.assign(prev.get(q.id) || { x: 0, y: 0, dir: 0, trail: 0 }, q));
       const mine = players.get(myId); if (mine && state === "loading" && myLoad.n) mine.load = { ...myLoad }; // ma progression locale est plus à jour
+      const myPick = document.querySelector('input[name="team"]:checked'); if (mine && state === "role" && myPick) mine.tpick = myPick.value;
       const zChanged = JSON.stringify(m.zone) !== JSON.stringify(zone) || m.mode !== gameMode;
       zone = m.zone; gameMode = MODES[m.mode] ? m.mode : "survie";
       if (zChanged && state === "lobby") { showGuestZone(); schedulePrefetch(); }

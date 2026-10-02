@@ -7,6 +7,7 @@ function newGame(setup) {
   const p = me(); const roleKey = isHost ? myRole() : (ROLES[p.role] ? p.role : myRole());
   p.role = roleKey;
   const R = ROLES[roleKey], s = G.spawn;
+  G.elev = setup.elev || null; // relief du mode Sommet
   game = {
     mode: setup.mode, M: MODES[setup.mode] || MODES.survie, setup, rng: setup.mode === "defi" ? mulberry32(setup.seed) : Math.random,
     R, t: 0, wave: 0, nextWave: CFG.zombieDelay, pending: [], fieldT: 0, sendT: 0, markT: 0, sprint: false, sprinting: false, lastBanner: "",
@@ -25,7 +26,8 @@ function newGame(setup) {
       hiddenUntil: 0, fadeUntil: 0, planqueEnd: 0, tx: undefined, ty: undefined, saveUsed: false, invulnUntil: 0, markUntil: 0,
     });
   }
-  G.adjBlocked.fill(0); G.lureFields.clear();
+  if (setup.summit != null && G.elev) { const n = setup.summit; game.summit = { node: n, x: G.X[n], y: G.Y[n], alt: Math.round(elevAt(G.X[n], G.Y[n])) }; }
+  G.adjBlocked.fill(0); G.lureFields.clear(); G.eLoadT.fill(-99);
   if (isHost) hostModeInit();
 }
 const meP = () => players.get(myId) || {};
@@ -35,7 +37,10 @@ function mySkill() { const q = meP(); if (q.master) return "cri"; if (q.zombie |
 
 function hostModeInit() {
   const gm = game, n = players.size;
-  if (gm.mode === "extraction") gm.evac = { at: CFG.extractAt, node: -1, open: false, places: Math.max(1, Math.floor(n / 2)), taken: 0, end: 0 };
+  if (gm.mode === "extraction") { // zone approximative connue dès le départ, point d'atterrissage précis 30 s avant
+    const c = pickNodeAround(G.X[G.spawn], G.Y[G.spawn], 350, 700);
+    gm.evac = { at: CFG.extractAt, node: -1, open: false, places: Math.max(1, Math.floor(n / 2)), taken: 0, end: 0, zx: G.X[c], zy: G.Y[c], zr: CFG.evacZoneR, told: false };
+  }
   if (gm.mode === "patient") {
     const ids = [...players.keys()]; gm.patientId = ids[(Math.random() * ids.length) | 0]; gm.turned = false;
     const pz = players.get(gm.patientId);
@@ -59,7 +64,7 @@ function spawnZombie(k, s) {
     x: G.X[s], y: G.Y[s], a: s, b: s, route: [],
     speed: waveSpeed(k) * (0.9 + rnd() * 0.2),
     ox: Math.cos(ang) * 3, oy: Math.sin(ang) * 3, wob: rnd() * 10,
-    role: k >= CFG.flankFrom && rnd() < CFG.flankShare ? "flank" : "chase", hunt: false, tgt: -1,
+    role: ((r) => k >= CFG.flankFrom && r < CFG.flankShare ? "flank" : r > 1 - CFG.roamShare ? "roam" : "chase")(rnd()), hunt: false, tgt: -1,
     master: masters.length ? masters[game.zombies.length % masters.length].id : null, criUntil: 0,
   });
 }

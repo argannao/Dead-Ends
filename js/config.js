@@ -34,9 +34,15 @@ const CFG = {
   scentEvery: 4,        // s : les zombies qui ne te voient pas suivent ta piste, mise à jour toutes les 4 s
   scentSprint: 1.5,     //     (toutes les 1,5 s si tu sprintes)
   flankFrom: 2,         // à partir de cette vague, une partie des zombies sont des rabatteurs
-  flankShare: 0.35,     // proportion de rabatteurs
+  flankShare: 0.4,      // proportion de rabatteurs
   flankClose: 90,       // m : sous cette distance, un rabatteur fonce droit sur toi
   aheadDist: 160,       // m : un rabatteur vise le carrefour vers lequel tu cours, jusqu'à cette distance devant toi
+  spreadCost: 45,       // m : détour accepté par zombie qui vient de prendre la même rue (ils s'étalent dans les rues parallèles)
+  spreadMemory: 5,      // s : durée pendant laquelle une rue reste « encombrée »
+  spreadMax: 220,       // m : détour maximum par rapport au plus court chemin
+  spreadClose: 70,      // m : sous cette distance d'un joueur, plus de détour, ils foncent
+  roamShare: 0.2,       // proportion de rôdeurs qui quadrillent le quartier quand ils ne voient personne
+  roamR: 450,           // m : rayon de quadrillage autour de la dernière position connue
   playZoom: 17,
   // Compétences et modes
   lureRange: 600,       // m : un pétard attire les zombies (qui ne poursuivent personne) dans ce rayon
@@ -45,6 +51,7 @@ const CFG = {
   goalR: 15,            // m : rayon des points d'arrivée (évacuation, destination, arrivée)
   extractAt: 150,       // s : ouverture de l'évacuation
   extractOpen: 60,      // s : durée d'ouverture
+  evacZoneR: 250,       // m : rayon de la zone d'évacuation approximative
   patientTurn: 120,     // s : transformation du patient zéro
   patientEnd: 480,      // s : fin de l'épidémie (les humains restants gagnent)
   modeDur: 360,         // s : durée des modes Chasse au trésor, Roi de la colline, Zombies contre survivants
@@ -58,6 +65,13 @@ const CFG = {
   reviveTime: 3,        // s à côté d'un coéquipier à terre pour le relever
   reviveR: 12,          // m
   bleedOut: 60,         // s : un joueur à terre non relevé meurt
+  // Mode Sommet : effet des pentes (joueurs et zombies)
+  slopeUp: 6,           // en montée, vitesse ÷ (1 + 6 × pente) : −38 % à 10 %
+  slopeDown: 2.5,       // en descente, vitesse × (1 + 2,5 × pente)
+  slopeMin: 0.5,        // vitesse minimale en montée raide
+  slopeMax: 1.25,       // vitesse maximale en descente
+  slopeDrain: 150,      // endurance perdue par seconde en montée, × la pente (10 % : −15/s)
+  summitMin: 400,       // m : le sommet est choisi au moins à cette distance du départ
 };
 // Classes : un passif, une compétence (touche A) et un défaut
 const ROLES = {
@@ -85,17 +99,17 @@ const SKILLS = {
   rush:      { name: "Rush",      cd: 30, dur: 4,  desc: "4 s de sprint sans fatigue" },
   drone:     { name: "Drone",     cd: 40, dur: 5,  desc: "Voit tous les zombies pendant 5 s" },
   planque:   { name: "Planque",   cd: 35, dur: 3,  desc: "3 s immobile : même ceux qui te traquent perdent ta trace" },
-  petard:    { name: "Pétard",    cd: 30, dur: 6,  range: 250, target: true, desc: "Attire tous les zombies proches, même ceux qui te chassent" },
+  petard:    { name: "Pétard",    cd: 30, dur: 12,  range: 250, target: true, desc: "Attire tous les zombies proches, même ceux qui te chassent" },
   barricade: { name: "Barricade", cd: 35, dur: 12, range: 150, target: true, desc: "Bloque une rue pendant 12 s" },
   cri:       { name: "Cri",       cd: 20, dur: 4,  desc: "Ta horde accélère de 40 % pendant 4 s" },
   souffle:   { name: "Second souffle", cd: 40, dur: 0, desc: "Endurance pleine immédiatement" },
-  raccourci: { name: "Raccourci", cd: 25, dur: 0,  range: 90, target: true, desc: "Traverse un pâté de maisons en ligne droite jusqu'à une rue à 90 m" },
-  appat:     { name: "Appât",     cd: 45, dur: 6,  range: 200, target: true, desc: "Marque un joueur : les zombies le repèrent de plus loin pendant 6 s" },
+  raccourci: { name: "Raccourci", cd: 20, cdStep: 15, cdMax: 120, dur: 0, range: 90, target: true, desc: "Traverse un pâté de maisons en ligne droite jusqu'à une rue à 90 m. Recharge +15 s à chaque usage" },
+  appat:     { name: "Appât",     cd: 45, dur: 10, range: 200, target: true, desc: "Marque un joueur pendant 10 s : les zombies le repèrent de plus loin et ceux qui le chassent accélèrent de 20 %" },
 };
 // Modes de jeu (les prototypes sont jouables mais encore à équilibrer)
 const MODES = {
   survie:     { name: "Dernier survivant", min: 1, desc: "Tout le monde part du point zéro. Le dernier en vie gagne." },
-  extraction: { name: "Extraction", min: 1, desc: "Après 2 min 30, une évacuation s'ouvre 60 s quelque part. Seuls les premiers arrivés sont sauvés (1 place pour 2 joueurs)." },
+  extraction: { name: "Extraction", min: 1, desc: "La zone d'atterrissage est connue dès le départ, le point exact 30 s avant. Après 2 min 30, l'hélico se pose 60 s. Seuls les premiers arrivés sont sauvés (1 place pour 2 joueurs)." },
   patient:    { name: "Patient zéro", min: 3, desc: "Un joueur est infecté en secret et se transforme après 2 min. Chaque victime rejoint son camp. Les humains gagnent s'ils tiennent 8 min." },
   tresor:     { name: "Chasse au trésor", min: 1, score: true, desc: "Ramasse les caisses : points et bonus. Meilleur score en 6 min. Mourir coûte la moitié de tes points." },
   colline:    { name: "Roi de la colline", min: 1, score: true, desc: "Marque des points en restant seul dans la zone. Elle se déplace et attire la horde. 120 points ou 6 min." },
@@ -103,9 +117,15 @@ const MODES = {
   horde:      { name: "Zombies contre survivants", min: 2, team: true, desc: "Un ou deux joueurs dirigent la horde (clic pour la guider, A pour hurler). Les survivants doivent tenir 6 min." },
   aube:       { name: "Tenir jusqu'à l'aube", min: 1, proto: true, coop: true, desc: "10 min de nuit qui s'éclaircit. Un joueur attrapé tombe à terre : reste 3 s près de lui pour le relever. Si quelqu'un tient jusqu'à l'aube, tout le monde gagne." },
   course:     { name: "Course contre la montre", min: 1, proto: true, desc: "Rejoins l'arrivée le plus vite possible, horde aux trousses. Meilleurs temps enregistrés pour chaque trajet." },
+  sommet:     { name: "Sommet", min: 1, proto: true, desc: "Le premier à atteindre le point le plus haut de la zone gagne. Les montées ralentissent et épuisent, les descentes accélèrent, zombies compris." },
   defi:       { name: "Défi du jour", min: 1, proto: true, desc: "Même lieu et mêmes vagues pour tout le monde aujourd'hui. Survis le plus longtemps : classement du jour." },
 };
-const TEAMS = [{ name: "bleue", color: "#5ec8f2" }, { name: "orange", color: "#ff9e3d" }];
+const TEAMS = [{ name: "bleue", color: "#3b8cff" }, { name: "rouge", color: "#ff3d5a" }]; // bleu contre rouge : lisible aussi pour les daltoniens
+// Choix d'équipe dans le salon (modes en équipes)
+const TEAM_PICKS = {
+  escorte: [["auto", "Hasard", "#8a99a8"], ["0", "Bleue", "#3b8cff"], ["1", "Rouge", "#ff3d5a"]],
+  horde: [["auto", "Hasard", "#8a99a8"], ["surv", "Survivants", "#ffad42"], ["horde", "Horde", "#e5484d"]],
+};
 // Lieux du défi du jour (un par jour, à tour de rôle)
 const DAILY_SPOTS = [
   ["Paris · Le Marais", 48.8575, 2.3590], ["Lyon · Presqu'île", 45.7640, 4.8357], ["Marseille · Vieux-Port", 43.2951, 5.3740],

@@ -60,29 +60,68 @@ function zombieThink(z) {
     z.inv = false;
     const P = T[z.tgt];
     if (P && sameEdge(z, P) && !edgeBlocked(P.a, P.b)) { z.route = [{ x: P.x, y: P.y, n: -1, ea: P.a, eb: P.b }]; return; }
-    step(z, z.role === "flank" && bd > CFG.flankClose && gm.ahead.length ? G.F3 : G); return;
+    z.roam = null;
+    step(z, z.role === "flank" && bd > CFG.flankClose && gm.ahead.length ? G.F3 : G, false, bd < CFG.spreadClose); return;
   }
   // pas de proie en vue : attiré par un pétard, la colline ou le ralliement de son maître
   const grp = lureFor(z);
   if (grp) { step(z, lureField(grp), true); return; }
   if (!T.length) { z.route = []; return; }
+  if (z.role === "roam" && roamStep(z)) return;
   step(z, gm.known.length ? G.F2 : G);
 }
-function step(z, F, stay) {
+// Rôdeur : il quadrille les rues autour de la dernière position connue des joueurs au lieu de suivre la file
+function roamStep(z) {
+  const gm = game;
+  if (z.roam && (z.roam.until < gm.t || (z.a === z.b && z.a === z.roam.node))) z.roam = null;
+  if (!z.roam) {
+    const K = gm.known.length ? gm.known[(gm.rng() * gm.known.length) | 0] : null; if (!K) return false;
+    const n = pickNodeAround(K.x, K.y, 120, CFG.roamR, gm.rng);
+    const r = route(z, { x: G.X[n], y: G.Y[n], a: n, b: n }); if (!r || !r.length) return false;
+    z.roam = { node: n, path: r, until: gm.t + 25 };
+  }
+  // on suit le chemin calculé, sans le recalculer à chaque pas
+  while (z.roam.path.length && hyp(z.x, z.y, z.roam.path[0].x, z.roam.path[0].y) < 0.01) z.roam.path.shift();
+  if (!z.roam.path.length) { z.roam = null; return false; }
+  z.route = [z.roam.path[0]]; return true;
+}
+// Les zombies s'étalent : une rue que plusieurs viennent d'emprunter devient moins attirante, les suivants prennent les rues parallèles.
+function edgeLoad(p) { return game.t - G.eLoadT[p] < CFG.spreadMemory ? G.eLoadN[p] : 0; }
+function step(z, F, stay, close) {
   if (z.a === z.b) {
     let nx = F.next[z.a];
+    if (nx >= 0 && !stay && !close) {
+      let best = Infinity, bp = -1;
+      for (let p = G.adjStart[z.a]; p < G.adjStart[z.a + 1]; p++) {
+        if (G.adjBlocked[p]) continue;
+        const c = G.adjLen[p] + F.dist[G.adjTo[p]] + CFG.spreadCost * edgeLoad(p);
+        if (c < best) { best = c; bp = p; }
+      }
+      if (bp >= 0 && isFinite(best) && G.adjLen[bp] + F.dist[G.adjTo[bp]] < F.dist[z.a] + CFG.spreadMax) {
+        nx = G.adjTo[bp];
+        if (z.lastEdge !== bp || z.lastEdgeT < game.t - 1) { // compté une seule fois par passage
+          if (game.t - G.eLoadT[bp] >= CFG.spreadMemory) G.eLoadN[bp] = 0;
+          G.eLoadN[bp]++; G.eLoadT[bp] = game.t; z.lastEdge = bp; z.lastEdgeT = game.t;
+        }
+      }
+    }
     if (nx < 0 && stay) { z.route = []; z.inv = false; return; } // arrivé sur place : il reprend la piste
     if (nx < 0 && F !== G) { F = G; nx = G.next[z.a]; } // arrivé au point visé : on reprend la poursuite directe
     if (nx < 0) {
       const P = game.targets[G.owner[z.a]] || game.targets[0]; if (!P) { z.route = []; return; }
       z.route = [{ x: P.x, y: P.y, n: -1, ea: P.a, eb: P.b }]; return;
     }
-    z.route = [{ x: G.X[nx], y: G.Y[nx], n: nx }];
+    z.route = [{ x: G.X[nx], y: G.Y[nx], n: nx }]; z.goNode = nx;
   } else {
     const da = hyp(z.x, z.y, G.X[z.a], G.Y[z.a]) + F.dist[z.a];
     const db = hyp(z.x, z.y, G.X[z.b], G.Y[z.b]) + F.dist[z.b];
     if (!isFinite(da) && !isFinite(db)) { z.route = []; return; }
-    const t = da < db ? z.a : z.b;
+    let t = da < db ? z.a : z.b;
+    // il garde la rue qu'il a choisie au carrefour (sinon il ferait demi-tour vers le plus court chemin)
+    if (!close && (z.goNode === z.a || z.goNode === z.b) && z.goNode !== t) {
+      const dg = z.goNode === z.a ? da : db;
+      if (isFinite(dg) && dg < Math.min(da, db) + CFG.spreadMax) t = z.goNode;
+    }
     z.route = [{ x: G.X[t], y: G.Y[t], n: t }];
   }
 }

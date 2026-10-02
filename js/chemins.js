@@ -84,6 +84,7 @@ function buildGraph(data, lat0, lon0, withPaths = true) {
   const mkField = () => ({ dist: new Float64Array(N), next: new Int32Array(N), owner: new Int16Array(N) });
   g.F2 = mkField(); g.F3 = mkField(); // champ « piste » (dernières positions connues) et champ « rabatteurs » (carrefours devant les joueurs)
   g.adjBlocked = new Uint8Array(g.adjTo.length); // rues bloquées par une barricade
+  g.eLoadN = new Uint16Array(g.adjTo.length); g.eLoadT = new Float64Array(g.adjTo.length).fill(-99); // rues empruntées récemment par des zombies
   g.lureFields = new Map();                      // champs d'attraction (pétards, colline, ralliement de la horde)
   // Vrais carrefours (au moins 3 directions) : affichés en points pour distinguer un croisement d'un pont
   // (on n'affiche pas ceux qui se trouvent sous un pont, pour ne pas faire croire qu'on peut y tourner depuis le pont)

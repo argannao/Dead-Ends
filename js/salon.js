@@ -147,9 +147,25 @@ function enterRole() {
   if (zoneCircle) zoneCircle.remove();
   zoneCircle = L.circle([zone.lat, zone.lon], { radius: zone.r, color: css("--sodium"), weight: 1.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
   $("roleMode").innerHTML = modeBadge(gameMode);
+  renderTeamPick();
+  prepareRelief(); // mode Sommet : altitudes téléchargées pendant le choix des classes
   showStep("stepRole");
   pushLobby(); refreshRoleButtons();
 }
+// Choix d'équipe (escorte : bleue ou rouge ; horde : survivants ou horde)
+function renderTeamPick() {
+  const opts = TEAM_PICKS[gameMode], box = $("teamBox");
+  box.hidden = !opts; if (!opts) return;
+  const p = me(), cur = p && opts.some((o) => o[0] === p.tpick) ? p.tpick : "auto";
+  if (p) p.tpick = cur;
+  $("teamPick").innerHTML = opts.map(([v, name, col]) => `<label style="--tc:${col}"><input type="radio" name="team" value="${v}"${v === cur ? " checked" : ""}><span class="sw" style="background:${col}"></span>${name}</label>`).join("");
+  document.querySelectorAll('input[name="team"]').forEach((r) => r.addEventListener("change", () => {
+    const q = me(); if (!q) return; q.tpick = r.value;
+    if (isHost) pushLobby(); else toHost({ t: "pick", tpick: q.tpick });
+    renderPlayers();
+  }));
+}
+function teamPickName(p) { const o = (TEAM_PICKS[gameMode] || []).find((x) => x[0] === p.tpick); return o && o[0] !== "auto" ? o[1].toLowerCase() : ""; }
 function modeBadge(k) { const M = MODES[k] || MODES.survie; return `Mode : <b>${esc(M.name)}</b>${M.proto ? ' <span class="proto">Prototype</span>' : ""}`; }
 function myRole() { const r = document.querySelector('input[name="role"]:checked'); return r && ROLES[r.value] ? r.value : "coureur"; }
 function refreshRoleButtons() {
@@ -169,20 +185,28 @@ function refreshRoleButtons() {
 function toggleReady() {
   const p = me(); if (!p) return;
   p.ready = !p.ready; p.role = myRole();
-  if (isHost) pushLobby(); else toHost({ t: "ready", ready: p.ready, role: p.role });
+  if (isHost) pushLobby(); else toHost({ t: "ready", ready: p.ready, role: p.role, tpick: p.tpick });
   refreshRoleButtons(); renderPlayers();
 }
 document.querySelectorAll('input[name="role"]').forEach((r) => r.addEventListener("change", () => {
   const p = me(); if (!p) return; p.role = myRole();
   if (p.ready) { if (isHost) pushLobby(); else toHost({ t: "ready", ready: true, role: p.role }); }
 }));
-function hostLaunch() {
-  if (!isHost) return;
+let launching = false;
+async function hostLaunch() {
+  if (!isHost || launching) return;
   const p = me(); p.role = myRole(); p.ready = true;
   const all = [...players.values()];
   if (net && !all.every((q) => q.ready)) return;
   if (all.length < (MODES[gameMode] || MODES.survie).min) return;
   const setup = makeSetup();
+  if (gameMode === "sommet") {
+    launching = true; $("launchBtn").disabled = true; $("launchBtn").textContent = "Calcul du relief…";
+    try { G.elev = await prepareRelief(); } finally { launching = false; }
+    if (state !== "role") return;
+    setup.elev = G.elev; setup.summit = pickSummit();
+    if (!G.elev.real) banner("Altitudes indisponibles : relief simulé", false, 3000);
+  }
   broadcast({ t: "start", setup });
   startCountdown(setup);
 }
@@ -210,8 +234,12 @@ function makeSetup() {
   const rnd = mulberry32(seed ^ 0x5bd1e995);
   const st = { mode: gameMode, seed, teams: {}, vip: [], masters: [], dests: [] };
   if (gameMode === "escorte") {
-    const sh = shuffle(ids.slice(), rnd);
-    sh.forEach((id, i) => { st.teams[id] = i % 2; });
+    // chacun garde l'équipe choisie ; les « au hasard » complètent l'équipe la plus petite ; une équipe vide récupère un joueur
+    const sh = shuffle(ids.slice(), rnd), pick = (id) => (players.get(id) || {}).tpick;
+    for (const id of sh) if (pick(id) === "0" || pick(id) === "1") st.teams[id] = +pick(id);
+    const size = (t) => sh.filter((id) => st.teams[id] === t).length;
+    for (const id of sh) if (st.teams[id] == null) st.teams[id] = size(0) <= size(1) ? 0 : 1;
+    for (const t of [0, 1]) if (!size(t) && sh.length > 1) { const big = sh.filter((id) => st.teams[id] === 1 - t); st.teams[big[big.length - 1]] = t; }
     for (const t of [0, 1]) { const m = sh.filter((id) => st.teams[id] === t); if (m.length) st.vip.push(m[0]); }
     const sx = G.X[G.spawn], sy = G.Y[G.spawn];
     const a = pickNodeAround(sx, sy, 700, 1100, rnd);
@@ -219,6 +247,12 @@ function makeSetup() {
     const b = pickNodeAround(sx, sy, 700, 1100, rnd, (n) => { let d = Math.abs(Math.atan2(G.Y[n] - sy, G.X[n] - sx) - angA); if (d > Math.PI) d = 2 * Math.PI - d; return d > 1.8; });
     st.dests = [a, b].map((n, t) => ({ x: G.X[n], y: G.Y[n], node: n, team: t }));
   }
-  if (gameMode === "horde") st.masters = shuffle(ids.slice(), rnd).slice(0, ids.length >= 5 ? 2 : 1);
+  if (gameMode === "horde") {
+    // ceux qui ont choisi la horde la dirigent (au moins 1 survivant) ; sinon on tire au sort parmi les « au hasard », puis parmi tous
+    const sh = shuffle(ids.slice(), rnd), pick = (id) => (players.get(id) || {}).tpick;
+    let m = sh.filter((id) => pick(id) === "horde").slice(0, Math.max(1, ids.length - 1));
+    if (!m.length) { const auto = sh.filter((id) => pick(id) !== "surv"); m = (auto.length ? auto : sh).slice(0, ids.length >= 5 ? 2 : 1); }
+    st.masters = m;
+  }
   return st;
 }

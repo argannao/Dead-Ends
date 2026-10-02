@@ -18,11 +18,15 @@ function objectiveText() {
   let t = h ? h.txt + (h.left != null ? ` ${fmtClock(h.left)}` : "") + (h.extra ? ` · ${h.extra}` : "") : "";
   if (gm.mode === "patient" && gm.secret && !q.zombie) t = `Tu es le patient zéro · transformation dans ${fmtClock(CFG.patientTurn - gm.t)}`;
   if (gm.mode === "patient" && q.zombie) t = "Infecté : attrape les humains" + (h && h.left != null ? ` · ${fmtClock(h.left)}` : "");
-  if (gm.mode === "extraction") { const e = findMark("evac"); if (e && !q.escaped) t += ` · ${dist(e)}`; if (q.escaped) t = "Évacué : tu es sauvé"; }
+  if (gm.mode === "extraction") { const e = findMark("evac"), z = findMark("evacZone"); if (e && !q.escaped) t += ` · ${dist(e)}`; else if (z && !q.escaped) t += ` · zone ${dist(z)}`; if (q.escaped) t = "Évacué : tu es sauvé"; }
   if (gm.mode === "colline") { const hl = findMark("hill"); if (hl) t += hl[4] === myId ? " · tu tiens la colline !" : ` · colline ${dist(hl)}`; }
   if (gm.mode === "escorte" && q.team != null) { const d = findMark("dest", (m) => m[3] === q.team); t = `${q.vip ? "Tu es le VIP : rejoins" : "Escorte ton VIP jusqu'à"} la destination ${TEAMS[q.team].name}${d ? " · " + dist(d) : ""}`; }
   if (gm.mode === "horde" && q.master) t = "Maître de la horde : clic pour rallier, A pour hurler" + (h && h.left != null ? ` · ${fmtClock(h.left)}` : "");
   if (gm.mode === "course") { const f = findMark("finish"); t = q.escaped ? "Arrivé ! Tu observes les autres" : `Rejoins l'arrivée${f ? " · " + dist(f) : ""}`; }
+  if (gm.mode === "sommet") {
+    const s = findMark("summit"), alt = Math.round(elevAt(P.x, P.y)), g = Math.round((gm.grade || 0) * 100);
+    t = q.escaped ? "Au sommet !" : `Atteins le sommet${s ? ` (${s[3]} m) · ${dist(s)}` : ""} · tu es à ${alt} m${g >= 2 ? ` · montée ${g} %` : g <= -2 ? ` · descente ${-g} %` : ""}`;
+  }
   if (gm.mode === "aube" && q.down) t = "À terre : un coéquipier doit rester 3 s près de toi";
   return t;
 }
@@ -80,7 +84,7 @@ function updateHud() {
     $("skName").textContent = S.name;
     $("skState").textContent = gm.targeting ? "Vise…" : active ? "Actif" : cd > 0 ? `${Math.ceil(cd)} s` : "Prêt";
     btn.classList.toggle("ready", cd <= 0 && !gm.targeting); btn.classList.toggle("aiming", !!gm.targeting); btn.classList.toggle("active", active);
-    btn.style.setProperty("--cd", String(cd > 0 ? cd / S.cd : 0));
+    btn.style.setProperty("--cd", String(cd > 0 ? cd / (gm.skillCdLen || S.cd) : 0));
     btn.title = S.desc;
   }
   let near = Infinity; for (const z of gm.zombies) near = Math.min(near, hyp(z.x, z.y, P.x, P.y));

@@ -110,6 +110,14 @@ function render(now) {
   for (const m of game.marks) {
     const q = px(m[1], m[2]);
     switch (m[0]) {
+      case "evacZone": { // zone approximative de l'atterrissage
+        const r = metersToPx(m[3]);
+        ctx.globalAlpha = 0.1 + 0.05 * pul; dot(q.x, q.y, r, COL.ok); ctx.globalAlpha = 1;
+        ring(q.x, q.y, r, "rgba(126,224,129,0.7)", 2, [8, 8]);
+        label(`ZONE D'ÉVACUATION · point exact dans ${m[4]} s`, q.x, q.y - r - 8, "#b9f5c9");
+        edgeArrow(q, COL.ok, "", W, Hh);
+        break;
+      }
       case "evac": {
         const open = m[3] === 1, col = open ? COL.ok : "rgba(126,224,129,0.6)";
         ring(q.x, q.y, metersToPx(CFG.goalR) + 4, col, 3, open ? [] : [6, 6]);
@@ -150,6 +158,16 @@ function render(now) {
         ring(q.x, q.y, r, COL.sodium, 2);
         label("ARRIVÉE", q.x, q.y - r - 8, "#fff");
         edgeArrow(q, "#fff", "", W, Hh);
+        break;
+      }
+      case "summit": { // sommet : petite montagne + drapeau
+        ctx.fillStyle = "#c9d4dd"; ctx.strokeStyle = "#0b0f14"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(q.x - 14, q.y + 6); ctx.lineTo(q.x, q.y - 12); ctx.lineTo(q.x + 14, q.y + 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = COL.sodium; ctx.beginPath(); ctx.moveTo(q.x, q.y - 12); ctx.lineTo(q.x, q.y - 28); ctx.lineTo(q.x + 11, q.y - 24); ctx.lineTo(q.x, q.y - 20); ctx.fill();
+        ctx.strokeStyle = COL.sodium; ctx.beginPath(); ctx.moveTo(q.x, q.y - 12); ctx.lineTo(q.x, q.y - 28); ctx.stroke();
+        ring(q.x, q.y, metersToPx(CFG.goalR) + 6 + pul * 4, COL.sodium, 2, [4, 4]);
+        label(`SOMMET · ${m[3]} m`, q.x, q.y - 34, "#ffd08a");
+        edgeArrow(q, COL.sodium, "", W, Hh);
         break;
       }
       case "lure": {
@@ -243,13 +261,14 @@ function render(now) {
       label(q.name, o.x, o.y - 11, "rgba(138,153,168,0.9)"); continue;
     }
     ctx.globalAlpha = q.hidden ? 0.35 : 1;
-    if (q.team != null) ring(o.x, o.y, 9, TEAMS[q.team].color, 3);
+    const qc = q.team != null ? TEAMS[q.team].color : q.color; // en équipe : couleur de l'équipe
+    if (q.team != null) ring(o.x, o.y, 10, "#ffffff", 2);
     if (q.zombie) { dot(o.x, o.y, 7, COL.blood); ring(o.x, o.y, 7, "#2a0709", 2); }
     else if (q.down) { dot(o.x, o.y, 6, "rgba(138,153,168,0.9)"); }
-    else { ctx.fillStyle = q.color; ctx.strokeStyle = "#0b0f14"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(o.x, o.y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    else { ctx.fillStyle = qc; ctx.strokeStyle = "#0b0f14"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(o.x, o.y, q.team != null ? 8 : 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
     if (q.vip) { ctx.fillStyle = "#ffd75e"; ctx.beginPath(); ctx.moveTo(o.x, o.y - 22); ctx.lineTo(o.x + 5, o.y - 16); ctx.lineTo(o.x, o.y - 10); ctx.lineTo(o.x - 5, o.y - 16); ctx.fill(); }
     if (q.markUntil > game.t) ring(o.x, o.y, 13 + 3 * Math.sin(now / 120), "#ff9b9e", 2, [3, 3]);
-    label(q.zombie ? `${q.name} (infecté)` : q.markUntil > game.t ? `${q.name} · marqué` : q.name, o.x, o.y - (q.vip ? 26 : 11), q.zombie ? "#ff9b9e" : q.color);
+    label(q.zombie ? `${q.name} (infecté)` : q.markUntil > game.t ? `${q.name} · marqué` : q.name, o.x, o.y - (q.vip ? 26 : 13), q.zombie ? "#ff9b9e" : qc);
     ctx.globalAlpha = 1;
   }
   // moi
@@ -260,10 +279,10 @@ function render(now) {
     }
     return;
   }
-  const r = 7, myColor = mine.color || COL.sodium;
+  const r = 7, myColor = mine.team != null ? TEAMS[mine.team].color : mine.color || COL.sodium;
   const hiddenMe = game.planqueUntil > game.t;
   ctx.globalAlpha = hiddenMe ? 0.45 : 1;
-  if (mine.team != null) ring(pp.x, pp.y, 11, TEAMS[mine.team].color, 3);
+  if (mine.team != null) { dot(pp.x, pp.y, 12, TEAMS[mine.team].color); ring(pp.x, pp.y, 12, "#ffffff", 2); }
   if (game.sprinting) dot(pp.x, pp.y, r * 2.4, "rgba(255,173,66,0.3)");
   if (mine.zombie) { dot(pp.x, pp.y, r + 1, COL.blood); ring(pp.x, pp.y, r + 1, "#2a0709", 2); }
   else if (mine.down) { dot(pp.x, pp.y, r, "rgba(138,153,168,0.9)"); }

@@ -27,7 +27,7 @@ function startCountdown(setup) {
   };
   tick();
 }
-const WIN_TITLES = { survie: "Victoire", extraction: "Évacué", patient: "Victoire", tresor: "Victoire", colline: "Victoire", escorte: "Victoire", horde: "Victoire", aube: "L'aube est là", course: "Victoire", defi: "Victoire" };
+const WIN_TITLES = { survie: "Victoire", extraction: "Évacué", patient: "Victoire", tresor: "Victoire", colline: "Victoire", escorte: "Victoire", horde: "Victoire", aube: "L'aube est là", course: "Victoire", defi: "Victoire", sommet: "Au sommet" };
 function showResults(m) {
   state = "over"; if (game) { game.sprint = false; game.targeting = null; } drawPts = null;
   mapEl.classList.remove("aiming");
@@ -46,6 +46,7 @@ function showResults(m) {
   if (m.mode === "horde") sub = winners.length && rows.find((r) => r.win && r.note === "Maître de la horde") ? "La horde a eu tout le monde." : "Les survivants ont tenu.";
   if (m.mode === "aube") { if (!won) title = "La nuit l'emporte"; sub = won ? "Vous avez tenu jusqu'au lever du jour." : "Tout le monde est tombé avant l'aube."; }
   if (m.mode === "course") { if (!won) title = mine.note === "Arrivé" ? "Arrivé" : "Rattrapé"; sub = winners[0] ? `Meilleur temps : <b>${esc(winners[0].name)}</b> en ${winners[0].value}.` : "Personne n'a atteint l'arrivée."; }
+  if (m.mode === "sommet") { if (!won) title = mine.note === "Au sommet" ? "Au sommet" : "Rattrapé"; sub = winners[0] ? `<b>${esc(winners[0].name)}</b> atteint le sommet en ${winners[0].value}.` : "Personne n'a atteint le sommet."; }
   $("overTitle").textContent = title;
   $("overTitle").classList.toggle("win", won);
   $("stepOver").classList.toggle("victory", won);
