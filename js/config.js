@@ -104,7 +104,7 @@ const SKILLS = {
   cri:       { name: "Cri",       cd: 20, dur: 4,  desc: "Ta horde accélère de 40 % pendant 4 s" },
   souffle:   { name: "Second souffle", cd: 40, dur: 0, desc: "Endurance pleine immédiatement" },
   raccourci: { name: "Raccourci", cd: 20, cdStep: 15, cdMax: 120, dur: 0, range: 90, target: true, desc: "Traverse un pâté de maisons en ligne droite jusqu'à une rue à 90 m. Recharge +15 s à chaque usage" },
-  appat:     { name: "Appât",     cd: 45, dur: 10, range: 200, target: true, desc: "Marque un joueur pendant 10 s : les zombies le repèrent de plus loin et ceux qui le chassent accélèrent de 20 %" },
+  appat:     { name: "Appât",     cd: 45, dur: 15, range: 200, target: true, desc: "Marque un joueur pendant 15 s : les zombies le repèrent de plus loin et ceux qui le chassent accélèrent de 20 %" },
 };
 // Modes de jeu (les prototypes sont jouables mais encore à équilibrer)
 const MODES = {
@@ -148,9 +148,16 @@ const HIGHWAYS = "trunk|trunk_link|primary|primary_link|secondary|secondary_link
 const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const $ = (id) => document.getElementById(id);
 const hyp = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
-// Cartes de classes (générées depuis ROLES et SKILLS)
-$("roleList").innerHTML = Object.entries(ROLES).map(([k, R], i) => `<label class="role"><input type="radio" name="role" value="${k}"${i === 0 ? " checked" : ""}>
-  <span class="glyph">${R.glyph}</span>
-  <span class="rtxt"><span class="name">${R.name}</span>
-  <span class="perk">${R.skill ? `<b>${SKILLS[R.skill].name}</b> · ${SKILLS[R.skill].desc} <i>(${SKILLS[R.skill].cd} s)</i>` : `<b>${R.passive.name}</b> · ${R.passive.desc} <i>(passif)</i>`}</span>
-  <span class="perk2"><span class="plus">+</span> ${R.perk}${R.flaw ? ` <span class="minus">−</span> ${R.flaw}` : ""}</span></span></label>`).join("");
+// Choix de la classe : grille de tuiles (générée depuis ROLES) et fiche détaillée de la classe choisie
+$("roleList").innerHTML = Object.entries(ROLES).map(([k, R], i) => `<label class="role" title="${R.name}"><input type="radio" name="role" value="${k}"${i === 0 ? " checked" : ""}>
+  <span class="glyph">${R.glyph}</span><span class="name">${R.name}</span></label>`).join("");
+function renderRoleInfo() {
+  const r = document.querySelector('input[name="role"]:checked'), R = ROLES[r ? r.value : "coureur"]; if (!R) return;
+  const S = R.skill ? SKILLS[R.skill] : null;
+  const cd = S ? (S.cdStep ? `recharge ${S.cd} s, +${S.cdStep} s à chaque usage` : `recharge ${S.cd} s`) : "passif";
+  $("roleInfo").innerHTML = `<h3>${R.name}</h3>
+    <p class="sk">${S ? `<b>A · ${S.name}</b> : ${S.desc.replace(/\. Recharge.*$/, "")}` : `<b>${R.passive.name}</b> : ${R.passive.desc}`} <span class="cd">(${cd})</span></p>
+    <p class="pf"><span class="plus">${R.perk}</span>${R.flaw ? `<span class="minus">${R.flaw}</span>` : ""}</p>`;
+}
+document.querySelectorAll('input[name="role"]').forEach((r) => r.addEventListener("change", renderRoleInfo));
+renderRoleInfo();
