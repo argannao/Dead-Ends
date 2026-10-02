@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dead Ends</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="css/style.css?v=1">
+</head>
+<body>
+<div id="map" aria-label="Carte du jeu"></div>
+<canvas id="fx"></canvas>
+<div id="flash"></div>
+
+<section id="panel" aria-live="polite">
+  <div class="brand">
+    <h1>Dead Ends</h1>
+    <p id="tagline">Choisis où l'infection commence. Tout le monde part de là, et les zombies aussi.</p>
+  </div>
+
+  <div class="step" id="stepKey" hidden>
+    <span class="eyebrow">0 · Ta clé de carte</span>
+    <p class="note">Le fond de carte vient de CARTO, qui demande une clé gratuite à chaque joueur. Ça prend deux minutes, et tu ne le fais qu'une fois.</p>
+    <ol class="guide">
+      <li><a class="getkey" href="https://dashboard.basemaps.carto.com" target="_blank" rel="noopener">Ouvre le formulaire CARTO ↗</a></li>
+      <li>Remplis-le avec ces réponses :
+        <dl class="answers">
+          <dt>Email address</dt><dd>ton adresse e-mail (la clé y sera envoyée)</dd>
+          <dt>Your name</dt><dd>ton pseudo suffit</dd>
+          <dt>Commercial project?</dt><dd><b>No</b></dd>
+          <dt>What are you building?</dt>
+          <dd class="copyrow"><code id="buildText">Non-commercial hobby browser game "Dead Ends": a 2D zombie escape game played on real streets, needs a dark basemap.</code><button type="button" class="copy" data-copy="buildText">Copier</button></dd>
+          <dt id="refLabel">Restrict to specific websites <span class="fine">(conseillé)</span></dt>
+          <dd class="copyrow" id="refRow"><code id="refText"></code><button type="button" class="copy" data-copy="refText">Copier</button></dd>
+          <dt>Ensuite</dt><dd>coche les conditions d'utilisation, le reCAPTCHA, puis <b>Request API key</b></dd>
+        </dl>
+      </li>
+      <li>Ouvre l'e-mail de CARTO, copie ta clé et colle-la ici :</li>
+    </ol>
+    <form class="row" id="keyForm">
+      <input type="text" id="keyInput" placeholder="Colle ta clé ici" autocomplete="off" spellcheck="false">
+      <button type="button" id="pasteBtn">Coller</button>
+      <button type="submit">Valider</button>
+    </form>
+    <div class="status" id="keyStatus"></div>
+    <p class="fine">La clé reste dans ton navigateur. Elle n'est envoyée qu'à CARTO pour afficher la carte.</p>
+  </div>
+
+  <div class="step" id="stepMenu" hidden>
+    <div class="keyline"><span class="coords" id="keyInfo"></span><button type="button" class="link" id="changeKeyBtn">Changer de clé</button></div>
+    <label class="eyebrow" for="nameInput">Ton pseudo</label>
+    <input type="text" id="nameInput" maxlength="16" placeholder="Ton pseudo" autocomplete="nickname">
+    <button class="primary" id="createBtn">Créer une partie</button>
+    <span class="eyebrow">Rejoindre une partie</span>
+    <form class="row" id="joinForm">
+      <input type="text" id="codeInput" maxlength="5" placeholder="Code (ex. K7QXM)" autocomplete="off" spellcheck="false" class="codein">
+      <button type="submit">Rejoindre</button>
+    </form>
+    <button class="ghost" id="soloBtn">Jouer seul</button>
+    <div class="status" id="menuStatus"></div>
+  </div>
+
+  <div class="step" id="stepLobby" hidden>
+    <div class="codebox" id="codeBox">
+      <span class="eyebrow">Code de la partie</span>
+      <div class="coderow"><span class="code" id="codeText">-----</span><button type="button" class="copy" data-copy="codeText">Copier</button></div>
+      <span class="fine">Envoie ce code à tes amis : ils le saisissent dans « Rejoindre une partie ».</span>
+    </div>
+    <div class="step" id="hostZone">
+      <label class="eyebrow" for="modeSel">Mode de jeu</label>
+      <select id="modeSel"></select>
+      <p class="fine modedesc" id="modeDesc"></p>
+      <span class="eyebrow">Le lieu</span>
+      <div class="seg two" id="pinRow" role="radiogroup" aria-label="Point à placer" hidden>
+        <label><input type="radio" name="pin" value="start" checked><span class="t">Départ</span><span class="d">point zéro</span></label>
+        <label><input type="radio" name="pin" value="finish"><span class="t">Arrivée</span><span class="d">300 m à 4 km</span></label>
+      </div>
+      <form class="row" id="searchForm">
+        <input type="text" id="searchInput" placeholder="Une adresse, une ville…" autocomplete="off">
+        <button type="submit">Chercher</button>
+      </form>
+      <div class="coords" id="pickInfo">Clique sur la carte pour placer le point zéro.</div>
+      <div class="status" id="zoneStatus"></div>
+      <div class="step" id="radiusBox">
+      <span class="eyebrow">Taille de la zone</span>
+      <div class="seg" role="radiogroup" aria-label="Taille de la zone">
+        <label><input type="radio" name="radius" id="r800" value="800"><span class="t">Quartier</span><span class="d">r = 800 m</span></label>
+        <label><input type="radio" name="radius" id="r1500" value="1500" checked><span class="t">Ville</span><span class="d">r = 1,5 km</span></label>
+        <label><input type="radio" name="radius" id="r2500" value="2500"><span class="t">Large</span><span class="d">r = 2,5 km</span></label>
+      </div>
+      </div>
+      <label class="check"><input type="checkbox" id="withPaths" checked> <span>Inclure les chemins piétons et allées <span class="fine">(sentiers, passages, parkings)</span></span></label>
+      <p class="fine prefetch" id="hostPrefetch"></p>
+      <button class="primary" id="loadBtn" disabled>Charger la zone</button>
+    </div>
+    <div class="step" id="guestZone" hidden>
+      <p class="note" id="guestMode"></p>
+      <span class="eyebrow">Le lieu</span>
+      <p class="note" id="guestZoneText">L'hôte choisit où l'infection commence…</p>
+      <p class="fine prefetch" id="guestPrefetch"></p>
+    </div>
+  </div>
+
+  <div class="step" id="stepLoad" hidden>
+    <span class="eyebrow">Chargement de la zone</span>
+    <div class="loader" id="loader" hidden role="status">
+      <div class="lbar" aria-hidden="true"><div class="lfill" id="lFill"></div></div>
+      <div class="lrow"><span id="lPhase">Secteurs chargés : 0</span><span class="coords" id="lTime">0 s</span></div>
+      <div class="fine" id="lHint"></div>
+      <div class="fine slow" id="lSlow" hidden>Les serveurs OpenStreetMap sont parfois chargés. Une zone plus petite (Quartier) se charge beaucoup plus vite.</div>
+      <button type="button" class="ghost" id="cancelBtn">Annuler</button>
+    </div>
+    <div class="status" id="loadStatus"></div>
+    <p class="fine" id="waitAll" hidden>Ta carte est prête. La partie continue dès que tout le monde a fini de charger.</p>
+    <button id="retryBtn" hidden>Réessayer le chargement</button>
+    <button class="ghost" id="fakeBtn" hidden>Jouer sur une ville générée (pour tout le monde)</button>
+  </div>
+
+  <div class="step" id="stepRole" hidden>
+    <span class="eyebrow">Ta classe <span class="fine">(compétence : touche A)</span></span>
+    <p class="fine" id="roleMode"></p>
+    <div class="roles" id="roleList"></div>
+    <button class="ready" id="readyBtn">Je suis prêt</button>
+    <button class="primary" id="launchBtn" hidden>Lancer la partie</button>
+    <p class="fine" id="roleWait" hidden>L'hôte lance la partie dès que tout le monde est prêt.</p>
+    <button class="ghost" id="backBtn" hidden>Changer de lieu</button>
+  </div>
+
+  <div class="step" id="stepOver" hidden>
+    <p class="caught" id="overTitle">Rattrapé</p>
+    <p class="oversub" id="overSub" hidden></p>
+    <p class="fine" id="overMode"></p>
+    <ol class="ranking" id="ranking"></ol>
+    <div class="results">
+      <div><span class="k" id="rTimeK">Ta survie</span><span class="v" id="rTime">0:00.0</span></div>
+      <div><span class="k">Distance</span><span class="v" id="rDist">0 m</span></div>
+      <div><span class="k">Vague</span><span class="v" id="rWave">0</span></div>
+      <div><span class="k">Zombies</span><span class="v" id="rZomb">0</span></div>
+    </div>
+    <div class="best" id="rBest"></div>
+    <div class="step" id="boardBox" hidden>
+      <span class="eyebrow" id="boardTitle">Classement</span>
+      <p class="fine" id="boardMsg"></p>
+      <ol class="ranking" id="board"></ol>
+    </div>
+    <button class="primary" id="againBtn">Rejouer ici</button>
+    <button class="ghost" id="elsewhereBtn">Changer de lieu</button>
+    <p class="fine" id="overWait" hidden>L'hôte décide de la suite : rejouer ici ou changer de lieu.</p>
+  </div>
+
+  <div class="pbox" id="pbox" hidden>
+    <span class="eyebrow">Joueurs <span id="pcount"></span></span>
+    <ul class="plist" id="plist"></ul>
+  </div>
+  <button class="ghost" id="leaveBtn" hidden>Quitter la partie</button>
+</section>
+
+<div id="hud" hidden>
+  <div class="stats">
+    <span class="role-tag" id="hRole">Coureur</span>
+    <span class="hmode" id="hMode"></span>
+    <span class="k">Survie</span><span class="v big" id="hTime">0:00.0</span>
+    <span class="k">Vague</span><span class="v" id="hWave">–</span>
+    <span class="k">Zombies</span><span class="v" id="hZomb">0</span>
+    <span class="k" id="hAliveK">En vie</span><span class="v" id="hAliveRow"><span id="hAlive">1 / 1</span></span>
+    <span class="k" id="hScoreK" hidden>Score</span><span class="v big" id="hScore" hidden>0 pts</span>
+    <span class="k">Distance</span><span class="v" id="hDist">0 m</span>
+    <span class="obj" id="hObj" hidden></span>
+    <span class="detect" id="hDetect">Discret</span>
+  </div>
+  <div id="banner" hidden></div>
+  <div id="threat" hidden></div>
+  <button type="button" class="skill" id="skillBtn" hidden><span class="sk-key">A</span><span class="sk-name" id="skName">Rush</span><span class="sk-state" id="skState">Prêt</span></button>
+  <div class="stamina" id="stamBox">
+    <div class="bar"><div class="fill" id="hStam"></div></div>
+    <span class="lbl" id="hStamLbl">Endurance · Espace pour sprinter</span>
+  </div>
+  <div class="help" id="helpBox">
+    <span><kbd>Clic</kbd> courir vers un point</span>
+    <span><kbd>Shift</kbd> + glisser : tracer ton chemin</span>
+    <span><kbd>Espace</kbd> sprint (bruyant)</span>
+    <span><kbd>A</kbd> compétence</span>
+  </div>
+  <button id="sprintBtn" aria-label="Sprint">Sprint</button>
+</div>
+<div id="countdown"></div>
+
+<div id="acct">
+  <button type="button" class="acct-btn" id="acctBtn" aria-expanded="false" aria-controls="acctMenu">
+    <span class="acct-av" id="acctAv" hidden></span><span id="acctLabel">Se connecter</span>
+    <span class="acct-badge" id="acctBadge" hidden title="Demandes d'ami">1</span>
+    <span class="acct-online" id="acctOnline" hidden title="Amis en ligne">0</span>
+  </button>
+  <div class="acct-menu" id="acctMenu" hidden>
+    <div id="acctOut">
+      <span class="eyebrow">Ton compte</span>
+      <p class="note">Connecte-toi avec ton compte Google pour garder ta progression sur tous tes appareils et retrouver tes amis.</p>
+      <button type="button" class="primary" id="googleBtn" hidden>Se connecter avec Google</button>
+      <p class="fine" id="acctOff">Les comptes ne sont pas encore activés sur ce site. Le jeu reste jouable sans compte.</p>
+      <div class="status" id="acctMsg"></div>
+    </div>
+    <div id="acctIn" hidden>
+      <div class="me-row">
+        <span class="fav big" id="meAv"></span>
+        <span class="me-name"><b id="meName"></b><button type="button" class="link" id="signOutBtn">Se déconnecter</button></span>
+      </div>
+      <div class="stgrid">
+        <div><span class="k">Parties</span><span class="v" id="stGames">0</span></div>
+        <div><span class="k">Victoires</span><span class="v" id="stWins">0</span></div>
+        <div><span class="k">Meilleure survie</span><span class="v" id="stBest">0:00.0</span></div>
+        <div><span class="k">Meilleure vague</span><span class="v" id="stWave">0</span></div>
+        <div><span class="k">Distance totale</span><span class="v" id="stDist">0 m</span></div>
+        <div><span class="k">Temps de fuite</span><span class="v" id="stTime">0 min</span></div>
+      </div>
+      <div class="fcode">
+        <span class="eyebrow">Ton code ami</span>
+        <div class="coderow"><span class="code small" id="friendCode">------</span><button type="button" class="copy" data-copy="friendCode">Copier</button></div>
+      </div>
+      <form class="row" id="friendForm">
+        <input type="text" id="friendInput" maxlength="6" placeholder="Code ami (6 caractères)" autocomplete="off" spellcheck="false" class="codein">
+        <button type="submit">Ajouter</button>
+      </form>
+      <div class="status" id="friendMsg"></div>
+      <div id="reqBox" hidden>
+        <span class="eyebrow">Demandes</span>
+        <ul class="flist" id="reqList"></ul>
+      </div>
+      <span class="eyebrow">Amis <span id="friendCount"></span></span>
+      <p class="fine" id="noFriends">Pas encore d'amis. Partage ton code ami, ou utilise « + Ami » sur un joueur du salon.</p>
+      <ul class="flist" id="friendList"></ul>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="js/config.js?v=1"></script>
+<script src="js/carte.js?v=1"></script>
+<script src="js/chemins.js?v=1"></script>
+<script src="js/reseau.js?v=1"></script>
+<script src="js/salon.js?v=1"></script>
+<script src="js/partie.js?v=1"></script>
+<script src="js/zombies.js?v=1"></script>
+<script src="js/jeu.js?v=1"></script>
+<script src="js/rendu.js?v=1"></script>
+<script src="js/interface.js?v=1"></script>
+<script src="js/secteurs.js?v=1"></script>
+<script src="js/debut-fin.js?v=1"></script>
+<script src="js/compte.js?v=1"></script>
+<script src="js/demarrage.js?v=1"></script>
+</body>
+</html>
