@@ -621,22 +621,34 @@ const CFG = {
 const ROLES = {
   coureur:    { name: "Coureur",    glyph: "C", speedMul: 1.15, vision: 170, stamina: 80,  regenMul: 1, skill: "rush",
                 perk: "Vitesse +15 %", flaw: "Endurance −20 %" },
-  eclaireur:  { name: "Éclaireur",  glyph: "É", speedMul: 0.95, vision: 300, stamina: 100, regenMul: 1, skill: "drone",
-                perk: "Vision 300 m au lieu de 170 m", flaw: "Vitesse −5 %" },
+  eclaireur:  { name: "Éclaireur",  glyph: "É", speedMul: 1, vision: 300, stamina: 100, regenMul: 1, skill: "drone",
+                perk: "Vision 300 m au lieu de 170 m", flaw: "" },
   fantome:    { name: "Fantôme",    glyph: "F", speedMul: 1,    vision: 170, stamina: 100, regenMul: 1, skill: "planque", senseMul: 0.6, scentMul: 2, sprintCap: 3,
                 perk: "Repéré de moins loin, piste 2 fois moins précise", flaw: "Sprint limité à 3 s d'affilée" },
   artificier: { name: "Artificier", glyph: "A", speedMul: 1,    vision: 170, stamina: 100, regenMul: 1, skill: "petard", noiseMul: 1.3,
                 perk: "Fait diversion avec ses pétards", flaw: "Son sprint s'entend 30 % plus loin" },
-  saboteur:   { name: "Saboteur",   glyph: "S", speedMul: 0.95, vision: 170, stamina: 100, regenMul: 1, skill: "barricade",
-                perk: "Contrôle le terrain", flaw: "Vitesse −5 %" },
+  saboteur:   { name: "Saboteur",   glyph: "S", speedMul: 1, vision: 170, stamina: 100, regenMul: 1, skill: "barricade",
+                perk: "Contrôle le terrain", flaw: "" },
+  endurant:   { name: "Endurant",   glyph: "E", speedMul: 1, vision: 140, stamina: 190, regenMul: 1.5, skill: "souffle",
+                perk: "Endurance ×1,9, récupère 50 % plus vite", flaw: "Vision 140 m" },
+  traceur:    { name: "Traceur",    glyph: "T", speedMul: 1, vision: 170, stamina: 85, regenMul: 1, skill: "raccourci",
+                perk: "Passe là où les autres ne passent pas", flaw: "Endurance −15 %" },
+  increvable: { name: "Increvable", glyph: "I", speedMul: 1, vision: 170, stamina: 75, regenMul: 1, skill: null,
+                passive: { name: "Seconde chance", desc: "une fois par partie, échappe à une capture et repousse les zombies proches" },
+                perk: "Survit à une capture", flaw: "Endurance −25 %" },
+  charognard: { name: "Charognard", glyph: "R", speedMul: 1, vision: 130, stamina: 100, regenMul: 1, skill: "appat",
+                perk: "Moins repéré quand un autre joueur est plus près des zombies (multijoueur)", flaw: "Vision 130 m" },
 };
 const SKILLS = {
   rush:      { name: "Rush",      cd: 30, dur: 4,  desc: "4 s de sprint sans fatigue" },
   drone:     { name: "Drone",     cd: 40, dur: 5,  desc: "Voit tous les zombies pendant 5 s" },
-  planque:   { name: "Planque",   cd: 35, dur: 3,  desc: "3 s immobile, puis les zombies perdent ta trace" },
-  petard:    { name: "Pétard",    cd: 30, dur: 6,  range: 250, target: true, desc: "Attire les zombies sur un point à 250 m max" },
+  planque:   { name: "Planque",   cd: 35, dur: 3,  desc: "3 s immobile : même ceux qui te traquent perdent ta trace" },
+  petard:    { name: "Pétard",    cd: 30, dur: 6,  range: 250, target: true, desc: "Attire tous les zombies proches, même ceux qui te chassent" },
   barricade: { name: "Barricade", cd: 35, dur: 12, range: 150, target: true, desc: "Bloque une rue pendant 12 s" },
   cri:       { name: "Cri",       cd: 20, dur: 4,  desc: "Ta horde accélère de 40 % pendant 4 s" },
+  souffle:   { name: "Second souffle", cd: 40, dur: 0, desc: "Endurance pleine immédiatement" },
+  raccourci: { name: "Raccourci", cd: 25, dur: 0,  range: 90, target: true, desc: "Traverse un pâté de maisons en ligne droite jusqu'à une rue à 90 m" },
+  appat:     { name: "Appât",     cd: 45, dur: 6,  range: 200, target: true, desc: "Marque un joueur : les zombies le repèrent de plus loin pendant 6 s" },
 };
 // Modes de jeu (les prototypes sont jouables mais encore à équilibrer)
 const MODES = {
@@ -678,8 +690,8 @@ const hyp = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 $("roleList").innerHTML = Object.entries(ROLES).map(([k, R], i) => `<label class="role"><input type="radio" name="role" value="${k}"${i === 0 ? " checked" : ""}>
   <span class="glyph">${R.glyph}</span>
   <span class="rtxt"><span class="name">${R.name}</span>
-  <span class="perk"><b>${SKILLS[R.skill].name}</b> · ${SKILLS[R.skill].desc} <i>(${SKILLS[R.skill].cd} s)</i></span>
-  <span class="perk2"><span class="plus">+</span> ${R.perk} <span class="minus">−</span> ${R.flaw}</span></span></label>`).join("");
+  <span class="perk">${R.skill ? `<b>${SKILLS[R.skill].name}</b> · ${SKILLS[R.skill].desc} <i>(${SKILLS[R.skill].cd} s)</i>` : `<b>${R.passive.name}</b> · ${R.passive.desc} <i>(passif)</i>`}</span>
+  <span class="perk2"><span class="plus">+</span> ${R.perk}${R.flaw ? ` <span class="minus">−</span> ${R.flaw}` : ""}</span></span></label>`).join("");
 
 /* ---------------- Carte ---------------- */
 const map = L.map("map", { zoomControl: true, boxZoom: false, preferCanvas: true, worldCopyJump: true })
@@ -741,17 +753,19 @@ function buildGraph(data, lat0, lon0, withPaths = true) {
     if (el.type !== "way" || !el.nodes) continue;
     const minor = isMinor(el.tags);
     if (minor && !withPaths) continue;
+    const tg = el.tags || {};
+    const lvl = tg.bridge && tg.bridge !== "no" ? 1 : (tg.tunnel && tg.tunnel !== "no") || tg.covered === "yes" ? -1 : 0; // pont, tunnel ou au sol
     const w = [];
     for (let i = 0; i < el.nodes.length; i++) {
       const a = idOf.get(el.nodes[i]);
-      if (a === undefined) { if (w.length > 1) rawWays.push({ nodes: w.slice(), minor }); w.length = 0; continue; }
+      if (a === undefined) { if (w.length > 1) rawWays.push({ nodes: w.slice(), minor, lvl }); w.length = 0; continue; }
       if (w.length) {
         const b = w[w.length - 1];
         if (a !== b) { const key = a < b ? a + "_" + b : b + "_" + a; if (!seen.has(key)) { seen.add(key); nb[a].push(b); nb[b].push(a); } }
       }
       w.push(a);
     }
-    if (w.length > 1) rawWays.push({ nodes: w, minor });
+    if (w.length > 1) rawWays.push({ nodes: w, minor, lvl });
   }
   if (!xs.length) return null;
   // Plus grande composante accessible depuis le nœud le plus proche du point choisi
@@ -776,7 +790,7 @@ function buildGraph(data, lat0, lon0, withPaths = true) {
   const ways = [];
   for (const rw of rawWays) {
     let cur = [];
-    const push = () => { if (cur.length > 1) ways.push({ nodes: cur, minor: rw.minor }); };
+    const push = () => { if (cur.length > 1) ways.push({ nodes: cur, minor: rw.minor, lvl: rw.lvl }); };
     for (const o of rw.nodes) { const j = newId[o]; if (j < 0) { push(); cur = []; } else cur.push(j); }
     push();
   }
@@ -789,6 +803,19 @@ function buildGraph(data, lat0, lon0, withPaths = true) {
   g.F2 = mkField(); g.F3 = mkField(); // champ « piste » (dernières positions connues) et champ « rabatteurs » (carrefours devant les joueurs)
   g.adjBlocked = new Uint8Array(g.adjTo.length); // rues bloquées par une barricade
   g.lureFields = new Map();                      // champs d'attraction (pétards, colline, ralliement de la horde)
+  // Vrais carrefours (au moins 3 directions) : affichés en points pour distinguer un croisement d'un pont
+  // (on n'affiche pas ceux qui se trouvent sous un pont, pour ne pas faire croire qu'on peut y tourner depuis le pont)
+  const segs = [];
+  for (const w of ways) if (w.lvl === 1) for (let k = 1; k < w.nodes.length; k++) segs.push([w.nodes[k - 1], w.nodes[k]]);
+  const underBridge = (i) => segs.some(([a, b]) => {
+    if (a === i || b === i) return false;
+    const ax = X[a], ay = Y[a], vx = X[b] - ax, vy = Y[b] - ay, L2 = vx * vx + vy * vy;
+    if (X[i] < Math.min(ax, X[b]) - 10 || X[i] > Math.max(ax, X[b]) + 10 || Y[i] < Math.min(ay, Y[b]) - 10 || Y[i] > Math.max(ay, Y[b]) + 10) return false;
+    const t = L2 > 0 ? Math.max(0, Math.min(1, ((X[i] - ax) * vx + (Y[i] - ay) * vy) / L2)) : 0;
+    return Math.hypot(X[i] - ax - vx * t, Y[i] - ay - vy * t) < 8;
+  });
+  const junc = []; for (let i = 0; i < N; i++) if (deg[i + 1] - deg[i] >= 3 && !(segs.length && underBridge(i))) junc.push(i);
+  g.junc = Int32Array.from(junc);
   return g;
 }
 const CELL = 40;
@@ -1328,10 +1355,20 @@ function checkAllLoaded() {
 function drawNetwork(generated) {
   if (roadsLayer) roadsLayer.remove();
   const toLine = (w) => w.nodes.map((n) => toLL(G.X[n], G.Y[n]));
-  roadsLayer = L.layerGroup([
-    L.polyline(G.ways.filter((w) => !w.minor).map(toLine), { color: css("--sodium"), opacity: generated ? 0.55 : 0.45, weight: generated ? 3 : 2.5, interactive: false }),
-    L.polyline(G.ways.filter((w) => w.minor).map(toLine), { color: css("--sodium"), opacity: 0.6, weight: 1.6, dashArray: "3 5", interactive: false }),
-  ]).addTo(map);
+  const sel = (lvl, minor) => G.ways.filter((w) => (w.lvl || 0) === lvl && !!w.minor === minor).map(toLine);
+  const sodium = css("--sodium"), night = css("--night");
+  const layers = [
+    // tunnels et passages couverts : sous le reste, en pointillés effacés
+    L.polyline(sel(-1, false).concat(sel(-1, true)), { color: sodium, opacity: 0.28, weight: 2, dashArray: "2 6", interactive: false }),
+    // rues et chemins au sol
+    L.polyline(sel(0, false), { color: sodium, opacity: generated ? 0.55 : 0.45, weight: generated ? 3 : 2.5, interactive: false }),
+    L.polyline(sel(0, true), { color: sodium, opacity: 0.6, weight: 1.6, dashArray: "3 5", interactive: false }),
+    // ponts : un contour sombre les détache de ce qui passe dessous
+    L.polyline(sel(1, false).concat(sel(1, true)), { color: night, opacity: 1, weight: 8, lineCap: "butt", interactive: false }),
+    L.polyline(sel(1, false), { color: "#ffd08a", opacity: 0.95, weight: 3, lineCap: "butt", interactive: false }),
+    L.polyline(sel(1, true), { color: "#ffd08a", opacity: 0.9, weight: 2, dashArray: "3 4", lineCap: "butt", interactive: false }),
+  ];
+  roadsLayer = L.layerGroup(layers).addTo(map);
   if (pickMarker) { pickMarker.remove(); pickMarker = null; }
 }
 function lstatus(t, cls) { const s = $("loadStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); }
@@ -1443,7 +1480,7 @@ function newGame(setup) {
       alive: true, time: 0, x: G.X[s], y: G.Y[s], trail: 0, sp: { x: G.X[s], y: G.Y[s], a: s, b: s }, known: null, knownT: -99, alertUntil: 0, sprint: false, nx: [], hunted: 0,
       score: 0, scoreF: 0, zombie: false, patient: false, down: false, downT: 0, revive: 0, escaped: false, place: 0, finishT: null, catches: 0, infections: 0,
       master: setup.masters.includes(q.id), vip: setup.vip.includes(q.id), team: setup.teams[q.id] != null ? setup.teams[q.id] : null,
-      hiddenUntil: 0, fadeUntil: 0, planqueEnd: 0, tx: undefined, ty: undefined,
+      hiddenUntil: 0, fadeUntil: 0, planqueEnd: 0, tx: undefined, ty: undefined, saveUsed: false, invulnUntil: 0, markUntil: 0,
     });
   }
   G.adjBlocked.fill(0); G.lureFields.clear();
@@ -1519,6 +1556,7 @@ function senseFor(q) {
   let r = q.sprint ? CFG.senseSprint * (R.noiseMul || 1) : CFG.senseR;
   r *= R.senseMul || 1;
   if (q.fadeUntil > game.t) r *= 0.5;
+  if (q.markUntil > game.t) r *= 1.6; // marqué par un appât
   if (q.alertUntil > game.t) r *= CFG.alertMul;
   return r;
 }
@@ -1548,10 +1586,15 @@ function zombieThink(z) {
   const gm = game, T = gm.targets, A = gm.alive;
   // perception : le joueur le plus proche qu'il perçoit
   let best = -1, bd = Infinity;
+  const distracted = z.distractUntil > gm.t; // pétard : il ne remarque que les joueurs tout proches
   for (let i = 0; i < A.length; i++) {
     const q = A[i]; if (!isPrey(q)) continue;
+    if (z.ignoreUntil > gm.t && z.ignoreId === q.id) continue; // planque : il a perdu ta trace
     const d = hyp(z.x, z.y, q.x, q.y);
-    if (d < senseFor(q) * (z.hunt && z.tgt === i ? 1.4 : 1) && d < bd) { bd = d; best = i; }
+    if (distracted && d > 20) continue;
+    let sense = senseFor(q) * (z.hunt && z.tgt === i ? 1.4 : 1);
+    if (q.role === "charognard" && A.some((o) => o !== q && isPrey(o) && hyp(z.x, z.y, o.x, o.y) < d)) sense *= 0.5; // il passe après les autres
+    if (d < sense && d < bd) { bd = d; best = i; }
   }
   if (best >= 0) {
     if (!z.hunt || z.tgt !== best) { const q = A[best]; q.alertUntil = gm.t + CFG.alertTime; q.knownT = -99; } // il hurle
@@ -1640,27 +1683,58 @@ function useSkill() {
   if (id === "drone") gm.droneUntil = gm.t + S.dur;
   if (id === "planque") { gm.planqueUntil = gm.t + S.dur; gm.player.route = []; sendSkill({ k: "planque" }); }
   if (id === "cri") sendSkill({ k: "cri" });
+  if (id === "souffle") gm.player.stamina = gm.R.stamina;
   banner(`${S.name} !`, false, 1200);
 }
 function fireTarget(ll) {
   const gm = game, id = gm.targeting, S = SKILLS[id]; if (!S) return;
-  const p = toXY(ll), T = snap(p.x, p.y, 120);
+  const p = toXY(ll);
+  if (id === "appat") { // on vise un autre joueur
+    let tg = null, bd = 45;
+    for (const o of players.values()) if (o.id !== myId && isPrey(o)) { const d = hyp(o.x, o.y, p.x, p.y); if (d < bd) { bd = d; tg = o; } }
+    if (!tg) { banner("Clique sur un autre joueur", false, 1500); return; }
+    if (hyp(tg.x, tg.y, gm.player.x, gm.player.y) > S.range) { banner(`Trop loin : ${S.range} m maximum`, false, 1500); return; }
+    gm.targeting = null; mapEl.classList.remove("aiming"); gm.skillReadyAt = gm.t + S.cd;
+    sendSkill({ k: "appat", id: tg.id }); return;
+  }
+  const T = snap(p.x, p.y, id === "raccourci" ? 40 : 120);
   if (!T) { banner("Vise une rue", false, 1500); return; }
   if (hyp(T.x, T.y, gm.player.x, gm.player.y) > S.range) { banner(`Trop loin : ${S.range} m maximum`, false, 1500); return; }
   gm.targeting = null; mapEl.classList.remove("aiming"); gm.skillReadyAt = gm.t + S.cd;
   if (id === "petard") { const n = hyp(T.x, T.y, G.X[T.ea], G.Y[T.ea]) < hyp(T.x, T.y, G.X[T.eb], G.Y[T.eb]) ? T.ea : T.eb; sendSkill({ k: "petard", node: n }); banner("Pétard lancé !", false, 1500); }
   if (id === "barricade") { sendSkill({ k: "barricade", a: T.ea, b: T.eb }); banner("Barricade posée", false, 1500); }
+  if (id === "raccourci") { gm.player.route = [{ x: T.x, y: T.y, n: -1, ea: T.ea, eb: T.eb, jump: true }]; banner("Raccourci !", false, 1200); } // en ligne droite, hors des rues
 }
 function sendSkill(m) { m.t = "skill"; if (isHost) hostSkill(myId, m); else toHost(m); }
 function hostSkill(id, m) {
   const gm = game, q = players.get(id); if (!gm || !q || state !== "play") return;
   const okNode = (n) => Number.isInteger(n) && n >= 0 && n < G.N;
-  if (m.k === "planque" && isPrey(q) && q.role === "fantome") { q.hiddenUntil = gm.t + SKILLS.planque.dur; q.planqueEnd = gm.t + SKILLS.planque.dur; }
+  if (m.k === "planque" && isPrey(q) && q.role === "fantome") {
+    const dur = SKILLS.planque.dur;
+    q.hiddenUntil = gm.t + dur; q.planqueEnd = gm.t + dur;
+    // les zombies qui te traquent (ou rôdent à moins de 150 m) perdent ta trace tout de suite et partent sur une fausse piste
+    const idx = gm.alive.indexOf(q);
+    for (const z of gm.zombies) if ((z.hunt && z.tgt === idx) || hyp(z.x, z.y, q.x, q.y) < 150) {
+      z.hunt = false; z.tgt = -1; z.inv = false; z.ignoreId = q.id; z.ignoreUntil = gm.t + dur + 3;
+    }
+    const n = pickNodeAround(q.x, q.y, 250, 450);
+    q.known = { x: G.X[n], y: G.Y[n], a: n, b: n }; q.knownT = gm.t + dur; gm.forceFields = true;
+  }
   else if (m.k === "petard" && q.role === "artificier" && okNode(m.node)) {
-    gm.lures.push({ x: G.X[m.node], y: G.Y[m.node], node: m.node, until: gm.t + SKILLS.petard.dur, keep: gm.t + SKILLS.petard.dur + 90, range: CFG.lureRange, grp: "all", kind: "petard" });
+    const lx = G.X[m.node], ly = G.Y[m.node];
+    gm.lures.push({ x: lx, y: ly, node: m.node, until: gm.t + SKILLS.petard.dur, keep: gm.t + SKILLS.petard.dur + 90, range: CFG.lureRange, grp: "all", kind: "petard" });
     lureChanged("all");
+    for (const z of gm.zombies) if (hyp(z.x, z.y, lx, ly) < CFG.lureRange) {
+      z.hunt = false; z.tgt = -1; z.inv = true; z.invUntil = gm.t + 90; z.distractUntil = gm.t + SKILLS.petard.dur;
+    }
   } else if (m.k === "barricade" && q.role === "saboteur" && okNode(m.a) && okNode(m.b) && m.a !== m.b && edgeIdx(m.a, m.b) >= 0) {
     gm.bars.push([m.a, m.b, gm.t + SKILLS.barricade.dur]); setBlocked(m.a, m.b, true);
+  } else if (m.k === "appat" && q.role === "charognard" && isPrey(q)) {
+    const tg = players.get(m.id);
+    if (tg && tg !== q && isPrey(tg) && hyp(tg.x, tg.y, q.x, q.y) <= SKILLS.appat.range + 30) {
+      tg.markUntil = gm.t + SKILLS.appat.dur; gm.forceFields = true;
+      emit({ t: "ev", k: "marked", id: tg.id, name: tg.name, by: q.name, byId: q.id });
+    }
   } else if (m.k === "cri" && q.master) {
     for (const z of gm.zombies) if (z.master === id) z.criUntil = gm.t + SKILLS.cri.dur;
     emit({ t: "ev", k: "cri", name: q.name });
@@ -1687,6 +1761,7 @@ function moveMe(dt) {
   let spd = CFG.runSpeed * R.speedMul * (want ? CFG.sprintMul : 1);
   if (q.vip) spd *= CFG.vipSpeed;
   if (gm.speedBonusUntil > gm.t) spd *= 1.3;
+  if (P.route.length && P.route[0].jump) spd = Math.max(spd, CFG.runSpeed * 2.2); // raccourci : on fonce à travers le pâté
   advance(P, spd * dt);
   gm.sprinting = want;
 }
@@ -1741,11 +1816,12 @@ function hostUpdate(dt) {
   while (gm.pending.length && gm.pending[0].t <= gm.t) { const p = gm.pending.shift(); spawnZombie(gm.wave, p.node); }
   // Zombies
   for (const z of gm.zombies) {
+    if (z.stunUntil > gm.t) continue; // repoussé par un Increvable
     let left = z.speed * (z.criUntil > gm.t ? 1.4 : 1) * dt;
     for (let i = 0; i < 4 && left > 1e-6; i++) { zombieThink(z); if (!z.route.length) break; left = advance(z, left); }
   }
   // Captures par les zombies
-  for (const q of prey) for (const z of gm.zombies) if (hyp(z.x, z.y, q.x, q.y) < CFG.catchDist) {
+  for (const q of prey) if (!(q.invulnUntil > gm.t)) for (const z of gm.zombies) if (!(z.stunUntil > gm.t) && hyp(z.x, z.y, q.x, q.y) < CFG.catchDist) {
     if (z.master) { const m = players.get(z.master); if (m) m.catches++; }
     catchPlayer(q, null); break;
   }
@@ -1795,7 +1871,12 @@ function buildMarks() {
   return mk;
 }
 function catchPlayer(q, by) {
-  const gm = game; if (!isPrey(q) || gm.ended) return;
+  const gm = game; if (!isPrey(q) || gm.ended || q.invulnUntil > gm.t) return;
+  if (q.role === "increvable" && !q.saveUsed) { // seconde chance : il repousse les zombies proches et repart
+    q.saveUsed = true; q.invulnUntil = gm.t + 2.5;
+    for (const z of gm.zombies) if (hyp(z.x, z.y, q.x, q.y) < 25) { z.stunUntil = gm.t + 3; z.hunt = false; z.tgt = -1; }
+    emit({ t: "ev", k: "saved", id: q.id, name: q.name }); return;
+  }
   if (gm.mode === "patient") {
     q.zombie = true; q.time = gm.t;
     if (by) by.infections++; else { const pz = players.get(gm.patientId); if (pz) pz.infections++; }
@@ -1820,10 +1901,6 @@ function modeTick(dt) {
   // fin de planque : les zombies perdent ta trace et partent sur une fausse piste
   for (const q of all) if (q.planqueEnd && t >= q.planqueEnd) {
     q.planqueEnd = 0; q.fadeUntil = t + 3;
-    const idx = gm.alive.indexOf(q);
-    for (const z of gm.zombies) if (z.hunt && z.tgt === idx && hyp(z.x, z.y, q.x, q.y) > 30) { z.hunt = false; z.tgt = -1; }
-    const n = pickNodeAround(q.x, q.y, 250, 450);
-    q.known = { x: G.X[n], y: G.Y[n], a: n, b: n }; q.knownT = t; gm.forceFields = true;
   }
   switch (gm.mode) {
     case "extraction": {
@@ -1988,9 +2065,11 @@ function buildRows(win) {
 }
 // Un message de l'hôte est appliqué localement et envoyé à tous
 function emit(m) { broadcast(m); handleEvent(m); }
+function cancelAim() { if (game) game.targeting = null; drawPts = null; mapEl.classList.remove("aiming"); }
 function handleEvent(m) {
   if (!game) return;
   const mine = m.id === myId;
+  if (mine && ["dead", "turn", "infected", "down", "escaped", "finish"].includes(m.k)) cancelAim(); // changement d'état : on annule toute visée en cours
   switch (m.k) {
     case "warn": if (!isHost) game.upcoming = { at: game.t + m.left, pts: m.pts }; banner(`Vague ${m.wave} dans ${m.left} s · ${m.pts.map(where).join(" et ")}`, true, 3500); break;
     case "wave": game.wave = m.wave; if (!isHost) game.upcoming = null; banner(m.wave === 1 ? "Ils sortent du point zéro" : `Vague ${m.wave} · ${m.n} zombies`, true, 2600); flash(); break;
@@ -2016,6 +2095,10 @@ function handleEvent(m) {
     case "hillCall": banner("La colline attire la horde !", true, 2200); break;
     case "finish": banner(mine ? `Arrivé en ${fmtTime(m.time)} !` : `${m.name} est arrivé en ${fmtTime(m.time)}`, false, 3000); if (mine) map.dragging.enable(); break;
     case "cri": if (!meP().master) banner(`${m.name} hurle : la horde accélère !`, true, 2000); break;
+    case "saved": { const q = players.get(m.id); if (q) q.saveUsed = true; banner(mine ? "Seconde chance ! Tu repousses les zombies : cours !" : `${m.name} s'échappe de justesse`, mine, 2500); if (mine) flash(); break; }
+    case "marked": { const q = players.get(m.id); if (q) q.markUntil = game.t + SKILLS.appat.dur;
+      if (mine) banner(`${m.by} t'a marqué : les zombies te repèrent de plus loin pendant 6 s !`, true, 3000);
+      else if (m.byId === myId) banner(`Appât posé sur ${m.name}`, false, 2000); break; }
   }
 }
 function myDeath() {
@@ -2146,6 +2229,18 @@ function render(now) {
     ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(pp.x, pp.y, vis, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
     ring(pp.x, pp.y, vis, "rgba(255,173,66,0.18)", 1, [2, 6]);
+  }
+  // vrais carrefours : un point là où on peut tourner (pas de point = pont ou tunnel, on ne peut pas passer de l'un à l'autre)
+  if (map.getZoom() >= 16 && G.junc) {
+    const b = map.getBounds(), xa = (b.getWest() - G.lon0) * G.kx, xb = (b.getEast() - G.lon0) * G.kx, ya = (b.getSouth() - G.lat0) * G.ky, yb = (b.getNorth() - G.lat0) * G.ky;
+    const jr = map.getZoom() >= 17 ? 2.6 : 1.8;
+    ctx.fillStyle = "rgba(255,208,138,0.85)";
+    ctx.beginPath();
+    for (const n of G.junc) {
+      const x = G.X[n], y = G.Y[n]; if (x < xa || x > xb || y < ya || y > yb) continue;
+      const q = px(x, y); ctx.moveTo(q.x + jr, q.y); ctx.arc(q.x, q.y, jr, 0, Math.PI * 2);
+    }
+    ctx.fill();
   }
   // point zéro
   const pulse = (now / 1000) % 1.6 / 1.6;
@@ -2306,7 +2401,8 @@ function render(now) {
     else if (q.down) { dot(o.x, o.y, 6, "rgba(138,153,168,0.9)"); }
     else { ctx.fillStyle = q.color; ctx.strokeStyle = "#0b0f14"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(o.x, o.y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
     if (q.vip) { ctx.fillStyle = "#ffd75e"; ctx.beginPath(); ctx.moveTo(o.x, o.y - 22); ctx.lineTo(o.x + 5, o.y - 16); ctx.lineTo(o.x, o.y - 10); ctx.lineTo(o.x - 5, o.y - 16); ctx.fill(); }
-    label(q.zombie ? `${q.name} (infecté)` : q.name, o.x, o.y - (q.vip ? 26 : 11), q.zombie ? "#ff9b9e" : q.color);
+    if (q.markUntil > game.t) ring(o.x, o.y, 13 + 3 * Math.sin(now / 120), "#ff9b9e", 2, [3, 3]);
+    label(q.zombie ? `${q.name} (infecté)` : q.markUntil > game.t ? `${q.name} · marqué` : q.name, o.x, o.y - (q.vip ? 26 : 11), q.zombie ? "#ff9b9e" : q.color);
     ctx.globalAlpha = 1;
   }
   // moi
@@ -2405,7 +2501,13 @@ function updateHud() {
   }
   // compétence
   const sk = mySkill(), btn = $("skillBtn");
-  btn.hidden = !sk;
+  const passive = !sk && isPrey(q) && gm.R.passive;
+  btn.hidden = !sk && !passive;
+  if (passive) {
+    $("skName").textContent = gm.R.passive.name; $("skState").textContent = q.saveUsed ? "Utilisée" : "Prête";
+    btn.classList.toggle("ready", !q.saveUsed); btn.classList.remove("aiming", "active"); btn.style.setProperty("--cd", q.saveUsed ? "1" : "0");
+    btn.title = gm.R.passive.desc;
+  }
   if (sk) {
     const S = SKILLS[sk], cd = Math.max(0, gm.skillReadyAt - gm.t), active = (sk === "rush" && gm.rushUntil > gm.t) || (sk === "drone" && gm.droneUntil > gm.t) || (sk === "planque" && gm.planqueUntil > gm.t);
     $("skName").textContent = S.name;
@@ -2453,10 +2555,14 @@ map.on("click", (e) => {
   if (state === "lobby" && isHost) { lobbyMapClick(e.latlng); return; }
   if (state !== "play" || !game) return;
   if (performance.now() < suppressClick || (e.originalEvent && e.originalEvent.shiftKey)) return;
-  if (game.targeting) { fireTarget(e.latlng); return; }
+  if (game.targeting) {
+    if (mySkill() === game.targeting) { fireTarget(e.latlng); return; }
+    cancelAim(); // compétence plus disponible (infecté, à terre…) : le clic sert à se déplacer
+  }
   const q = meP();
   if (q.master) { const xy = toXY(e.latlng), T = snap(xy.x, xy.y, 300); if (T) { const n = hyp(T.x, T.y, G.X[T.ea], G.Y[T.ea]) < hyp(T.x, T.y, G.X[T.eb], G.Y[T.eb]) ? T.ea : T.eb; if (isHost) hostRally(myId, { node: n }); else toHost({ t: "rally", node: n }); banner("Ta horde se rassemble ici", false, 1200); } return; }
   if (!canMove()) return;
+  if (game.player.route.length && game.player.route[0].jump) return; // pendant un raccourci
   goTo(e.latlng);
 });
 map.on("mousemove", (e) => { if (game) game.mouseLL = e.latlng; });
