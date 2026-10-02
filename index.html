@@ -244,6 +244,38 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .ranking li.winner .rt { color: var(--sodium); }
 .vfx { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
 
+/* ---------- Modes et classes ---------- */
+select { background: var(--night); border: 1px solid var(--line); border-radius: 4px; padding: 9px 11px; color: var(--ink); font: 600 15px/1.2 var(--f-body); }
+select:focus-visible { outline: 2px solid var(--sodium); outline-offset: 2px; }
+.modedesc { margin: -2px 0 0; color: var(--ink); opacity: .85; font-size: 13px; }
+.seg.two { grid-template-columns: 1fr 1fr; }
+.proto { font: 700 10px/1 var(--f-label); text-transform: uppercase; letter-spacing: .1em; color: #1a1006; background: #b58cff; border-radius: 3px; padding: 2px 5px; vertical-align: 1px; }
+.role .rtxt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.role .perk i { color: var(--muted); font-style: normal; font-family: var(--f-mono); font-size: 11px; }
+.role .perk2 { font-size: 12px; color: var(--muted); }
+.role .plus { color: var(--ok); font-weight: 700; }
+.role .minus { color: #ff9b9e; font-weight: 700; margin-left: 4px; }
+.roles { max-height: 46vh; overflow: auto; }
+.rnote { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+.stats .hmode { grid-column: 1 / -1; font: 600 11px/1.2 var(--f-label); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-top: -2px; }
+.stats .obj { grid-column: 1 / -1; margin-top: 6px; padding: 6px 8px; border-radius: 3px; background: #1a140b; color: #ffd9a3; font: 600 13px/1.3 var(--f-body); max-width: 250px; }
+.skill {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(66px + env(safe-area-inset-bottom, 0px)); pointer-events: auto;
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px 8px 8px; border-radius: 22px; border: 2px solid var(--line);
+  background: rgba(11,15,20,.88); font: 700 14px/1 var(--f-label); text-transform: uppercase; letter-spacing: .06em; overflow: hidden;
+}
+.skill::before { content: ""; position: absolute; inset: 0; background: rgba(255,173,66,.18); transform-origin: left; transform: scaleX(calc(1 - var(--cd, 0))); z-index: -1; }
+.skill { isolation: isolate; }
+.skill .sk-key { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--line); color: var(--ink); font: 700 12px/1 var(--f-mono); }
+.skill .sk-state { color: var(--muted); font-family: var(--f-mono); font-size: 12px; }
+.skill.ready { border-color: var(--sodium); color: var(--sodium); }
+.skill.ready .sk-key { background: var(--sodium); color: #1a1006; }
+.skill.ready .sk-state { color: var(--sodium); }
+.skill.active { border-color: var(--ok); color: var(--ok); }
+.skill.aiming { border-color: #ffcf6b; color: #ffcf6b; }
+#map.aiming, #map.aiming .leaflet-interactive { cursor: crosshair !important; }
+@media (pointer: coarse) { .skill { left: auto; right: 100px; transform: none; bottom: calc(30px + env(safe-area-inset-bottom, 0px)); } }
+
 /* ---------- Compte ---------- */
 .leaflet-top.leaflet-right { margin-top: 56px; }
 #acct { position: absolute; top: 16px; right: 16px; z-index: 1100; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; max-width: calc(100% - 32px); }
@@ -358,25 +390,35 @@ button:disabled { opacity: .45; cursor: not-allowed; }
       <span class="fine">Envoie ce code à tes amis : ils le saisissent dans « Rejoindre une partie ».</span>
     </div>
     <div class="step" id="hostZone">
-      <span class="eyebrow">Le point de départ</span>
+      <label class="eyebrow" for="modeSel">Mode de jeu</label>
+      <select id="modeSel"></select>
+      <p class="fine modedesc" id="modeDesc"></p>
+      <span class="eyebrow">Le lieu</span>
+      <div class="seg two" id="pinRow" role="radiogroup" aria-label="Point à placer" hidden>
+        <label><input type="radio" name="pin" value="start" checked><span class="t">Départ</span><span class="d">point zéro</span></label>
+        <label><input type="radio" name="pin" value="finish"><span class="t">Arrivée</span><span class="d">300 m à 4 km</span></label>
+      </div>
       <form class="row" id="searchForm">
         <input type="text" id="searchInput" placeholder="Une adresse, une ville…" autocomplete="off">
         <button type="submit">Chercher</button>
       </form>
       <div class="coords" id="pickInfo">Clique sur la carte pour placer le point zéro.</div>
       <div class="status" id="zoneStatus"></div>
+      <div class="step" id="radiusBox">
       <span class="eyebrow">Taille de la zone</span>
       <div class="seg" role="radiogroup" aria-label="Taille de la zone">
         <label><input type="radio" name="radius" id="r800" value="800"><span class="t">Quartier</span><span class="d">r = 800 m</span></label>
         <label><input type="radio" name="radius" id="r1500" value="1500" checked><span class="t">Ville</span><span class="d">r = 1,5 km</span></label>
         <label><input type="radio" name="radius" id="r2500" value="2500"><span class="t">Large</span><span class="d">r = 2,5 km</span></label>
       </div>
+      </div>
       <label class="check"><input type="checkbox" id="withPaths" checked> <span>Inclure les chemins piétons et allées <span class="fine">(sentiers, passages, parkings)</span></span></label>
       <p class="fine prefetch" id="hostPrefetch"></p>
       <button class="primary" id="loadBtn" disabled>Charger la zone</button>
     </div>
     <div class="step" id="guestZone" hidden>
-      <span class="eyebrow">Le point de départ</span>
+      <p class="note" id="guestMode"></p>
+      <span class="eyebrow">Le lieu</span>
       <p class="note" id="guestZoneText">L'hôte choisit où l'infection commence…</p>
       <p class="fine prefetch" id="guestPrefetch"></p>
     </div>
@@ -398,18 +440,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   </div>
 
   <div class="step" id="stepRole" hidden>
-    <span class="eyebrow">Ton rôle</span>
-    <div class="roles">
-      <label class="role"><input type="radio" name="role" id="roleCoureur" value="coureur" checked>
-        <span class="glyph">C</span>
-        <span><span class="name">Coureur</span><br><span class="perk">Vitesse de course <b>+15 %</b></span></span></label>
-      <label class="role"><input type="radio" name="role" id="roleEclaireur" value="eclaireur">
-        <span class="glyph">É</span>
-        <span><span class="name">Éclaireur</span><br><span class="perk">Vision <b>300 m</b> au lieu de 170 m</span></span></label>
-      <label class="role"><input type="radio" name="role" id="roleEndurant" value="endurant">
-        <span class="glyph">E</span>
-        <span><span class="name">Endurant</span><br><span class="perk">Endurance <b>×1,9</b>, récupère <b>+50 %</b></span></span></label>
-    </div>
+    <span class="eyebrow">Ta classe <span class="fine">(compétence : touche A)</span></span>
+    <p class="fine" id="roleMode"></p>
+    <div class="roles" id="roleList"></div>
     <button class="ready" id="readyBtn">Je suis prêt</button>
     <button class="primary" id="launchBtn" hidden>Lancer la partie</button>
     <p class="fine" id="roleWait" hidden>L'hôte lance la partie dès que tout le monde est prêt.</p>
@@ -419,14 +452,20 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   <div class="step" id="stepOver" hidden>
     <p class="caught" id="overTitle">Rattrapé</p>
     <p class="oversub" id="overSub" hidden></p>
+    <p class="fine" id="overMode"></p>
     <ol class="ranking" id="ranking"></ol>
     <div class="results">
-      <div><span class="k">Ta survie</span><span class="v" id="rTime">0:00.0</span></div>
+      <div><span class="k" id="rTimeK">Ta survie</span><span class="v" id="rTime">0:00.0</span></div>
       <div><span class="k">Distance</span><span class="v" id="rDist">0 m</span></div>
       <div><span class="k">Vague</span><span class="v" id="rWave">0</span></div>
       <div><span class="k">Zombies</span><span class="v" id="rZomb">0</span></div>
     </div>
     <div class="best" id="rBest"></div>
+    <div class="step" id="boardBox" hidden>
+      <span class="eyebrow" id="boardTitle">Classement</span>
+      <p class="fine" id="boardMsg"></p>
+      <ol class="ranking" id="board"></ol>
+    </div>
     <button class="primary" id="againBtn">Rejouer ici</button>
     <button class="ghost" id="elsewhereBtn">Changer de lieu</button>
     <p class="fine" id="overWait" hidden>L'hôte décide de la suite : rejouer ici ou changer de lieu.</p>
@@ -442,23 +481,28 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 <div id="hud" hidden>
   <div class="stats">
     <span class="role-tag" id="hRole">Coureur</span>
+    <span class="hmode" id="hMode"></span>
     <span class="k">Survie</span><span class="v big" id="hTime">0:00.0</span>
     <span class="k">Vague</span><span class="v" id="hWave">–</span>
     <span class="k">Zombies</span><span class="v" id="hZomb">0</span>
     <span class="k" id="hAliveK">En vie</span><span class="v" id="hAliveRow"><span id="hAlive">1 / 1</span></span>
+    <span class="k" id="hScoreK" hidden>Score</span><span class="v big" id="hScore" hidden>0 pts</span>
     <span class="k">Distance</span><span class="v" id="hDist">0 m</span>
+    <span class="obj" id="hObj" hidden></span>
     <span class="detect" id="hDetect">Discret</span>
   </div>
   <div id="banner" hidden></div>
   <div id="threat" hidden></div>
-  <div class="stamina">
+  <button type="button" class="skill" id="skillBtn" hidden><span class="sk-key">A</span><span class="sk-name" id="skName">Rush</span><span class="sk-state" id="skState">Prêt</span></button>
+  <div class="stamina" id="stamBox">
     <div class="bar"><div class="fill" id="hStam"></div></div>
     <span class="lbl" id="hStamLbl">Endurance · Espace pour sprinter</span>
   </div>
-  <div class="help">
+  <div class="help" id="helpBox">
     <span><kbd>Clic</kbd> courir vers un point</span>
     <span><kbd>Shift</kbd> + glisser : tracer ton chemin</span>
     <span><kbd>Espace</kbd> sprint (bruyant)</span>
+    <span><kbd>A</kbd> compétence</span>
   </div>
   <button id="sprintBtn" aria-label="Sprint">Sprint</button>
 </div>
@@ -552,12 +596,74 @@ const CFG = {
   flankClose: 90,       // m : sous cette distance, un rabatteur fonce droit sur toi
   aheadDist: 160,       // m : un rabatteur vise le carrefour vers lequel tu cours, jusqu'à cette distance devant toi
   playZoom: 17,
+  // Compétences et modes
+  lureRange: 600,       // m : un pétard attire les zombies (qui ne poursuivent personne) dans ce rayon
+  vipSpeed: 0.85,       // le VIP de l'escorte avance moins vite
+  zPlayerSpeed: 6.4,    // m/s : vitesse d'un joueur infecté (patient zéro)
+  goalR: 15,            // m : rayon des points d'arrivée (évacuation, destination, arrivée)
+  extractAt: 150,       // s : ouverture de l'évacuation
+  extractOpen: 60,      // s : durée d'ouverture
+  patientTurn: 120,     // s : transformation du patient zéro
+  patientEnd: 480,      // s : fin de l'épidémie (les humains restants gagnent)
+  modeDur: 360,         // s : durée des modes Chasse au trésor, Roi de la colline, Zombies contre survivants
+  crateR: 10,           // m : rayon de ramassage d'une caisse
+  crateEvery: 8,        // s : réapparition d'une caisse
+  hillR: 35,            // m : rayon de la colline
+  hillMove: 90,         // s : la colline se déplace
+  hillGoal: 120,        // points pour gagner tout de suite
+  hillCall: 30,         // s : la colline attire la horde
+  aubeDur: 600,         // s : durée de la nuit
+  reviveTime: 3,        // s à côté d'un coéquipier à terre pour le relever
+  reviveR: 12,          // m
+  bleedOut: 60,         // s : un joueur à terre non relevé meurt
 };
+// Classes : un passif, une compétence (touche A) et un défaut
 const ROLES = {
-  coureur:   { name: "Coureur",   speedMul: 1.15, vision: CFG.vision, stamina: CFG.stamina,       regenMul: 1 },
-  eclaireur: { name: "Éclaireur", speedMul: 1,    vision: 300,        stamina: CFG.stamina,       regenMul: 1 },
-  endurant:  { name: "Endurant",  speedMul: 1,    vision: CFG.vision, stamina: CFG.stamina * 1.9, regenMul: 1.5 },
+  coureur:    { name: "Coureur",    glyph: "C", speedMul: 1.15, vision: 170, stamina: 80,  regenMul: 1, skill: "rush",
+                perk: "Vitesse +15 %", flaw: "Endurance −20 %" },
+  eclaireur:  { name: "Éclaireur",  glyph: "É", speedMul: 0.95, vision: 300, stamina: 100, regenMul: 1, skill: "drone",
+                perk: "Vision 300 m au lieu de 170 m", flaw: "Vitesse −5 %" },
+  fantome:    { name: "Fantôme",    glyph: "F", speedMul: 1,    vision: 170, stamina: 100, regenMul: 1, skill: "planque", senseMul: 0.6, scentMul: 2, sprintCap: 3,
+                perk: "Repéré de moins loin, piste 2 fois moins précise", flaw: "Sprint limité à 3 s d'affilée" },
+  artificier: { name: "Artificier", glyph: "A", speedMul: 1,    vision: 170, stamina: 100, regenMul: 1, skill: "petard", noiseMul: 1.3,
+                perk: "Fait diversion avec ses pétards", flaw: "Son sprint s'entend 30 % plus loin" },
+  saboteur:   { name: "Saboteur",   glyph: "S", speedMul: 0.95, vision: 170, stamina: 100, regenMul: 1, skill: "barricade",
+                perk: "Contrôle le terrain", flaw: "Vitesse −5 %" },
 };
+const SKILLS = {
+  rush:      { name: "Rush",      cd: 30, dur: 4,  desc: "4 s de sprint sans fatigue" },
+  drone:     { name: "Drone",     cd: 40, dur: 5,  desc: "Voit tous les zombies pendant 5 s" },
+  planque:   { name: "Planque",   cd: 35, dur: 3,  desc: "3 s immobile, puis les zombies perdent ta trace" },
+  petard:    { name: "Pétard",    cd: 30, dur: 6,  range: 250, target: true, desc: "Attire les zombies sur un point à 250 m max" },
+  barricade: { name: "Barricade", cd: 35, dur: 12, range: 150, target: true, desc: "Bloque une rue pendant 12 s" },
+  cri:       { name: "Cri",       cd: 20, dur: 4,  desc: "Ta horde accélère de 40 % pendant 4 s" },
+};
+// Modes de jeu (les prototypes sont jouables mais encore à équilibrer)
+const MODES = {
+  survie:     { name: "Dernier survivant", min: 1, desc: "Tout le monde part du point zéro. Le dernier en vie gagne." },
+  extraction: { name: "Extraction", min: 1, desc: "Après 2 min 30, une évacuation s'ouvre 60 s quelque part. Seuls les premiers arrivés sont sauvés (1 place pour 2 joueurs)." },
+  patient:    { name: "Patient zéro", min: 3, desc: "Un joueur est infecté en secret et se transforme après 2 min. Chaque victime rejoint son camp. Les humains gagnent s'ils tiennent 8 min." },
+  tresor:     { name: "Chasse au trésor", min: 1, score: true, desc: "Ramasse les caisses : points et bonus. Meilleur score en 6 min. Mourir coûte la moitié de tes points." },
+  colline:    { name: "Roi de la colline", min: 1, score: true, desc: "Marque des points en restant seul dans la zone. Elle se déplace et attire la horde. 120 points ou 6 min." },
+  escorte:    { name: "Escorte", min: 2, team: true, desc: "Deux équipes, un VIP chacune (plus lent). Le premier VIP arrivé à sa destination fait gagner son équipe." },
+  horde:      { name: "Zombies contre survivants", min: 2, team: true, desc: "Un ou deux joueurs dirigent la horde (clic pour la guider, A pour hurler). Les survivants doivent tenir 6 min." },
+  aube:       { name: "Tenir jusqu'à l'aube", min: 1, proto: true, coop: true, desc: "10 min de nuit qui s'éclaircit. Un joueur attrapé tombe à terre : reste 3 s près de lui pour le relever. Si quelqu'un tient jusqu'à l'aube, tout le monde gagne." },
+  course:     { name: "Course contre la montre", min: 1, proto: true, desc: "Rejoins l'arrivée le plus vite possible, horde aux trousses. Meilleurs temps enregistrés pour chaque trajet." },
+  defi:       { name: "Défi du jour", min: 1, proto: true, desc: "Même lieu et mêmes vagues pour tout le monde aujourd'hui. Survis le plus longtemps : classement du jour." },
+};
+const TEAMS = [{ name: "bleue", color: "#5ec8f2" }, { name: "orange", color: "#ff9e3d" }];
+// Lieux du défi du jour (un par jour, à tour de rôle)
+const DAILY_SPOTS = [
+  ["Paris · Le Marais", 48.8575, 2.3590], ["Lyon · Presqu'île", 45.7640, 4.8357], ["Marseille · Vieux-Port", 43.2951, 5.3740],
+  ["Bordeaux · Saint-Pierre", 44.8412, -0.5720], ["Nantes · Bouffay", 47.2140, -1.5530], ["Toulouse · Capitole", 43.6045, 1.4440],
+  ["Lille · Vieux-Lille", 50.6400, 3.0630], ["Strasbourg · Grande Île", 48.5818, 7.7507], ["Rennes · centre", 48.1114, -1.6800],
+  ["Montpellier · Écusson", 43.6108, 3.8767], ["Nice · Vieux-Nice", 43.6966, 7.2760], ["La Roche-sur-Yon · centre", 46.6705, -1.4260],
+  ["Angers · centre", 47.4710, -0.5518], ["Tours · Vieux-Tours", 47.3941, 0.6848], ["Dijon · centre", 47.3220, 5.0415],
+  ["Rouen · centre", 49.4425, 1.0930], ["Grenoble · centre", 45.1885, 5.7245], ["Clermont-Ferrand · centre", 45.7772, 3.0870],
+  ["Reims · centre", 49.2583, 4.0317], ["Le Mans · Cité Plantagenêt", 48.0080, 0.1980], ["Orléans · centre", 47.9025, 1.9090],
+  ["Caen · centre", 49.1829, -0.3707], ["Brest · Siam", 48.3904, -4.4861], ["Avignon · intra-muros", 43.9493, 4.8055],
+  ["La Rochelle · Vieux-Port", 46.1591, -1.1520],
+];
 const OVERPASS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
@@ -568,6 +674,12 @@ const HIGHWAYS = "trunk|trunk_link|primary|primary_link|secondary|secondary_link
 const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const $ = (id) => document.getElementById(id);
 const hyp = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+// Cartes de classes (générées depuis ROLES et SKILLS)
+$("roleList").innerHTML = Object.entries(ROLES).map(([k, R], i) => `<label class="role"><input type="radio" name="role" value="${k}"${i === 0 ? " checked" : ""}>
+  <span class="glyph">${R.glyph}</span>
+  <span class="rtxt"><span class="name">${R.name}</span>
+  <span class="perk"><b>${SKILLS[R.skill].name}</b> · ${SKILLS[R.skill].desc} <i>(${SKILLS[R.skill].cd} s)</i></span>
+  <span class="perk2"><span class="plus">+</span> ${R.perk} <span class="minus">−</span> ${R.flaw}</span></span></label>`).join("");
 
 /* ---------------- Carte ---------------- */
 const map = L.map("map", { zoomControl: true, boxZoom: false, preferCanvas: true, worldCopyJump: true })
@@ -675,6 +787,8 @@ function buildGraph(data, lat0, lon0, withPaths = true) {
   g.dist = new Float64Array(N); g.next = new Int32Array(N); g.owner = new Int16Array(N);
   const mkField = () => ({ dist: new Float64Array(N), next: new Int32Array(N), owner: new Int16Array(N) });
   g.F2 = mkField(); g.F3 = mkField(); // champ « piste » (dernières positions connues) et champ « rabatteurs » (carrefours devant les joueurs)
+  g.adjBlocked = new Uint8Array(g.adjTo.length); // rues bloquées par une barricade
+  g.lureFields = new Map();                      // champs d'attraction (pétards, colline, ralliement de la horde)
   return g;
 }
 const CELL = 40;
@@ -693,7 +807,7 @@ function buildGrid(g) {
 // Point le plus proche sur une rue : {x, y, a, b, d}
 function snap(x, y, maxR = 400) {
   const g = G; g.eS++;
-  let best = null, bd = Infinity;
+  let best = null, bd = Infinity, be = -1;
   const cx0 = Math.floor(x / CELL), cy0 = Math.floor(y / CELL), R = Math.ceil(maxR / CELL);
   for (let r = 0; r <= R; r++) {
     for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) {
@@ -707,7 +821,7 @@ function snap(x, y, maxR = 400) {
         let t = L2 > 0 ? ((x - ax) * vx + (y - ay) * vy) / L2 : 0; t = Math.max(0, Math.min(1, t));
         const px = ax + vx * t, py = ay + vy * t, d = hyp(x, y, px, py);
         if (d < bd) {
-          bd = d;
+          bd = d; be = e;
           if (t === 0) best = { x: ax, y: ay, a, b: a };
           else if (t === 1) best = { x: g.X[b], y: g.Y[b], a: b, b };
           else best = { x: px, y: py, a, b };
@@ -716,7 +830,7 @@ function snap(x, y, maxR = 400) {
     }
     if (best && bd < r * CELL) break;
   }
-  if (best) best.d = bd;
+  if (best) { best.d = bd; best.ea = g.EA[be]; best.eb = g.EB[be]; }
   return best;
 }
 function sameEdge(P, Q) {
@@ -741,6 +855,7 @@ function route(S, T) {
     const gn = g.gArr[n]; const ex = extra(n);
     if (ex >= 0 && gn + ex < best) { best = gn + ex; bestN = n; }
     for (let p = g.adjStart[n]; p < g.adjStart[n + 1]; p++) {
+      if (g.adjBlocked[p]) continue;
       const m = g.adjTo[p], c = gn + g.adjLen[p];
       if (g.gStamp[m] !== st || c < g.gArr[m]) { g.gStamp[m] = st; g.gArr[m] = c; g.prev[m] = n; H.push(c + h(m), m); }
     }
@@ -763,6 +878,7 @@ function computeField(srcs, F) {
   while (H.size) {
     const n = H.pop(); const d = H.topK; if (d > dist[n]) continue;
     for (let p = g.adjStart[n]; p < g.adjStart[n + 1]; p++) {
+      if (g.adjBlocked[p]) continue;
       const m = g.adjTo[p], c = d + g.adjLen[p];
       if (c < dist[m]) { dist[m] = c; next[m] = n; owner[m] = owner[n]; H.push(c, m); }
     }
@@ -814,7 +930,8 @@ let net = null;          // null = solo ; { host: true, link } ; { host: false, 
 let isHost = true;
 let myId = "host";
 let players = new Map(); // id -> joueur (l'hôte fait autorité, les autres reçoivent une copie)
-let zone = null;         // { lat, lon, r, paths, fake }
+let zone = null;         // { lat, lon, r, paths, fake, start?, finish?, name? }
+let gameMode = "survie"; // mode choisi par l'hôte
 let leaving = false;
 
 const makeCode = () => { const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let s = ""; for (let i = 0; i < 5; i++) s += A[(Math.random() * A.length) | 0]; return s; };
@@ -922,7 +1039,7 @@ let lobbyDirty = false;
 function pushLobby() { lobbyDirty = true; }
 setInterval(() => {
   if (!lobbyDirty) return; lobbyDirty = false;
-  if (isHost) broadcast({ t: "lobby", players: publicPlayers(), zone });
+  if (isHost) broadcast({ t: "lobby", players: publicPlayers(), zone, mode: gameMode });
   renderPlayers(); refreshRoleButtons();
 }, 150);
 
@@ -1050,6 +1167,8 @@ function hostOnData(id, m) {
     case "loaded": p.loaded = !!m.ok; p.failed = !m.ok; pushLobby(); checkAllLoaded(); break;
     case "ready": if (state === "role") { p.ready = !!m.ready; p.role = ROLES[m.role] ? m.role : "coureur"; pushLobby(); } break;
     case "cell": receiveCellPart(m, id); break;
+    case "skill": hostSkill(id, m); break;
+    case "rally": if (state === "play") hostRally(id, m); break;
     case "pos":
       if (state === "play" && G && p.alive) {
         p.x = +m.x; p.y = +m.y; p.dir = +m.dir || 0; p.trail = +m.trail || 0;
@@ -1074,8 +1193,8 @@ function guestOnData(m) {
       const prev = players; players = new Map();
       for (const q of m.players) players.set(q.id, Object.assign(prev.get(q.id) || { x: 0, y: 0, dir: 0, trail: 0 }, q));
       const mine = players.get(myId); if (mine && state === "loading" && myLoad.n) mine.load = { ...myLoad }; // ma progression locale est plus à jour
-      const zChanged = JSON.stringify(m.zone) !== JSON.stringify(zone);
-      zone = m.zone;
+      const zChanged = JSON.stringify(m.zone) !== JSON.stringify(zone) || m.mode !== gameMode;
+      zone = m.zone; gameMode = MODES[m.mode] ? m.mode : "survie";
       if (zChanged && state === "lobby") { showGuestZone(); schedulePrefetch(); }
       renderPlayers(); refreshRoleButtons();
       break;
@@ -1083,10 +1202,10 @@ function guestOnData(m) {
     case "load": zone = m.zone; startLoading(); break;
     case "role": enterRole(); break;
     case "toLobby": enterLobby(); break;
-    case "start": startCountdown(); break;
+    case "start": startCountdown(m.setup); break;
     case "snap": applySnap(m); break;
     case "ev": handleEvent(m); break;
-    case "over": showResults(m.results, m.wave, m.winner); break;
+    case "over": showResults(m); break;
     case "cell": receiveCellPart(m, "host"); break;
   }
 }
@@ -1099,20 +1218,21 @@ function enterLobby() {
   $("panel").hidden = false; $("hud").hidden = true;
   map.dragging.enable(); map.doubleClickZoom.enable();
   showStep("stepLobby"); setupLobbyView();
-  if (isHost) { broadcast({ t: "toLobby" }); if (picked) setPick(L.latLng(picked.lat, picked.lon)); }
+  if (isHost) { broadcast({ t: "toLobby" }); zoneChanged(); }
   else showGuestZone();
   pushLobby();
 }
 function setupLobbyView() {
+  if (isHost) setMode(gameMode);
   $("codeBox").hidden = !net;
   if (net) $("codeText").textContent = net.code;
   $("hostZone").hidden = !isHost; $("guestZone").hidden = isHost;
   $("loadBtn").textContent = net ? "Charger la zone pour tout le monde" : "Charger les rues";
 }
-function currentZone() { return picked ? { lat: picked.lat, lon: picked.lon, r: radius(), paths: $("withPaths").checked, fake: false } : null; }
-function zoneChanged() { if (!isHost) return; zone = currentZone(); pushLobby(); schedulePrefetch(); }
 function showGuestZone() {
   if (zoneCircle) { zoneCircle.remove(); zoneCircle = null; }
+  const M = MODES[gameMode] || MODES.survie;
+  $("guestMode").innerHTML = `${modeBadge(gameMode)}<br><span class="fine">${M.desc}</span>`;
   if (!zone) { $("guestZoneText").textContent = "L'hôte choisit où l'infection commence…"; return; }
   zoneCircle = L.circle([zone.lat, zone.lon], { radius: zone.r, color: css("--sodium"), weight: 1.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
   map.fitBounds(zoneCircle.getBounds(), { paddingTopLeft: [window.innerWidth > 640 ? 400 : 0, 0] });
@@ -1191,7 +1311,10 @@ function finishLoading(data, generated, gen) {
     if (isHost) $("fakeBtn").hidden = false;
     reportLoaded(false); return;
   }
-  G = g; drawNetwork(generated);
+  G = g;
+  if (zone.start) G.spawn = nodeNear(zone.start);
+  G.finish = zone.finish ? nodeNear(zone.finish) : null;
+  drawNetwork(generated);
   lstatus(`${G.N.toLocaleString("fr-FR")} carrefours et ${G.EA.length.toLocaleString("fr-FR")} tronçons chargés${generated ? " (ville générée)" : ""}.`, "good");
   $("waitAll").hidden = !net;
   reportLoaded(true);
@@ -1213,7 +1336,7 @@ function drawNetwork(generated) {
 }
 function lstatus(t, cls) { const s = $("loadStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); }
 
-/* ---------------- Rôles ---------------- */
+/* ---------------- Classes (choix avant la partie) ---------------- */
 function enterRole() {
   state = "role"; game = null;
   for (const p of players.values()) { p.ready = false; p.alive = true; p.time = 0; }
@@ -1222,10 +1345,12 @@ function enterRole() {
   if (G) map.setView(toLL(G.X[G.spawn], G.Y[G.spawn]), 16);
   if (zoneCircle) zoneCircle.remove();
   zoneCircle = L.circle([zone.lat, zone.lon], { radius: zone.r, color: css("--sodium"), weight: 1.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
+  $("roleMode").innerHTML = modeBadge(gameMode);
   showStep("stepRole");
   pushLobby(); refreshRoleButtons();
 }
-function myRole() { return document.querySelector('input[name="role"]:checked').value; }
+function modeBadge(k) { const M = MODES[k] || MODES.survie; return `Mode : <b>${esc(M.name)}</b>${M.proto ? ' <span class="proto">Prototype</span>' : ""}`; }
+function myRole() { const r = document.querySelector('input[name="role"]:checked'); return r && ROLES[r.value] ? r.value : "coureur"; }
 function refreshRoleButtons() {
   if (state !== "role") return;
   const p = me(); if (!p) return;
@@ -1233,10 +1358,11 @@ function refreshRoleButtons() {
   $("readyBtn").textContent = p.ready ? "Prêt ✓ · cliquer pour annuler" : "Je suis prêt";
   $("readyBtn").classList.toggle("on", !!p.ready);
   $("launchBtn").hidden = !isHost; $("backBtn").hidden = !isHost;
-  const others = [...players.values()];
-  const allReady = !net || others.every((q) => q.ready);
-  $("launchBtn").disabled = !allReady;
-  $("launchBtn").textContent = !net ? "Lancer la partie" : allReady ? "Lancer la partie" : `Lancer (${others.filter((q) => q.ready).length} / ${others.length} prêts)`;
+  const all = [...players.values()];
+  const allReady = !net || all.every((q) => q.ready);
+  const M = MODES[gameMode] || MODES.survie, enough = all.length >= M.min;
+  $("launchBtn").disabled = !allReady || !enough;
+  $("launchBtn").textContent = !enough ? `${M.name} : ${M.min} joueurs minimum` : !net || allReady ? "Lancer la partie" : `Lancer (${all.filter((q) => q.ready).length} / ${all.length} prêts)`;
   $("roleWait").hidden = isHost || !p.ready;
 }
 function toggleReady() {
@@ -1252,48 +1378,122 @@ document.querySelectorAll('input[name="role"]').forEach((r) => r.addEventListene
 function hostLaunch() {
   if (!isHost) return;
   const p = me(); p.role = myRole(); p.ready = true;
-  if (net && ![...players.values()].every((q) => q.ready)) return;
-  broadcast({ t: "start" });
-  startCountdown();
+  const all = [...players.values()];
+  if (net && !all.every((q) => q.ready)) return;
+  if (all.length < (MODES[gameMode] || MODES.survie).min) return;
+  const setup = makeSetup();
+  broadcast({ t: "start", setup });
+  startCountdown(setup);
+}
+
+/* ---------------- Préparation d'une partie (hôte) ---------------- */
+function mulberry32(a) { return function () { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function shuffle(a, rnd) { for (let i = a.length - 1; i > 0; i--) { const j = (rnd() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function todayKey() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function dailySpot() { return DAILY_SPOTS[hashStr("deadends:" + todayKey()) % DAILY_SPOTS.length]; }
+// Carrefour au hasard entre minD et maxD (à vol d'oiseau) d'un point
+function pickNodeAround(x, y, minD, maxD, rnd, avoid) {
+  rnd = rnd || Math.random;
+  for (const k of [1, 1.5, 2.5, 99]) {
+    for (let i = 0; i < 400; i++) {
+      const n = (rnd() * G.N) | 0, d = hyp(G.X[n], G.Y[n], x, y);
+      if (d >= minD / k && d <= maxD * k && (!avoid || avoid(n))) return n;
+    }
+  }
+  return G.spawn;
+}
+function makeSetup() {
+  const ids = [...players.keys()].sort();
+  const seed = gameMode === "defi" ? hashStr(todayKey()) : (Math.random() * 2 ** 31) | 0;
+  const rnd = mulberry32(seed ^ 0x5bd1e995);
+  const st = { mode: gameMode, seed, teams: {}, vip: [], masters: [], dests: [] };
+  if (gameMode === "escorte") {
+    const sh = shuffle(ids.slice(), rnd);
+    sh.forEach((id, i) => { st.teams[id] = i % 2; });
+    for (const t of [0, 1]) { const m = sh.filter((id) => st.teams[id] === t); if (m.length) st.vip.push(m[0]); }
+    const sx = G.X[G.spawn], sy = G.Y[G.spawn];
+    const a = pickNodeAround(sx, sy, 700, 1100, rnd);
+    const angA = Math.atan2(G.Y[a] - sy, G.X[a] - sx);
+    const b = pickNodeAround(sx, sy, 700, 1100, rnd, (n) => { let d = Math.abs(Math.atan2(G.Y[n] - sy, G.X[n] - sx) - angA); if (d > Math.PI) d = 2 * Math.PI - d; return d > 1.8; });
+    st.dests = [a, b].map((n, t) => ({ x: G.X[n], y: G.Y[n], node: n, team: t }));
+  }
+  if (gameMode === "horde") st.masters = shuffle(ids.slice(), rnd).slice(0, ids.length >= 5 ? 2 : 1);
+  return st;
 }
 
 /* ---------------- Partie ---------------- */
 let game = null;
-function newGame() {
-  const p = me(); const roleKey = isHost ? myRole() : p.role || myRole();
+function newGame(setup) {
+  const p = me(); const roleKey = isHost ? myRole() : (ROLES[p.role] ? p.role : myRole());
   p.role = roleKey;
-  const r = ROLES[roleKey], s = G.spawn;
+  const R = ROLES[roleKey], s = G.spawn;
   game = {
-    R: r, t: 0, wave: 0, nextWave: CFG.zombieDelay, pending: [], fieldT: 0, sendT: 0, sprint: false, sprinting: false, lastBanner: "",
-    player: { x: G.X[s], y: G.Y[s], a: s, b: s, route: [], trail: 0, dir: 0, stamina: r.stamina, alive: true },
-    zombies: [],      // hôte : zombies simulés ; invités : positions reçues (lissées)
-    upcoming: null,   // vague annoncée : { at, pts: [{x, y}] }
-    nests: [],        // anciens points d'apparition [{x, y}]
-    targets: [],      // hôte : positions des joueurs en vie (pour la poursuite)
-    alive: [], known: [], ahead: [], huntedMe: 0,
+    mode: setup.mode, M: MODES[setup.mode] || MODES.survie, setup, rng: setup.mode === "defi" ? mulberry32(setup.seed) : Math.random,
+    R, t: 0, wave: 0, nextWave: CFG.zombieDelay, pending: [], fieldT: 0, sendT: 0, markT: 0, sprint: false, sprinting: false, lastBanner: "",
+    player: { x: G.X[s], y: G.Y[s], a: s, b: s, route: [], trail: 0, dir: 0, stamina: R.stamina, alive: true },
+    zombies: [], upcoming: null, nests: [], targets: [], alive: [], known: [], ahead: [], huntedMe: 0, forceFields: true,
+    // compétences (locales)
+    skillReadyAt: 0, rushUntil: 0, droneUntil: 0, planqueUntil: 0, speedBonusUntil: 0, targeting: null, mouseLL: null, sprintRun: 0, sprintLock: false,
+    // état du mode (calculé par l'hôte, recopié chez les invités)
+    marks: [], bars: [], hud: null, lures: [], crates: [], hill: null, evac: null, secret: false, ended: false,
   };
-  for (const q of players.values()) { q.alive = true; q.time = 0; q.x = G.X[s]; q.y = G.Y[s]; q.trail = 0; q.sp = { x: q.x, y: q.y, a: s, b: s }; q.known = null; q.knownT = -99; q.alertUntil = 0; q.sprint = false; q.nx = []; q.hunted = 0; }
+  for (const q of players.values()) {
+    Object.assign(q, {
+      alive: true, time: 0, x: G.X[s], y: G.Y[s], trail: 0, sp: { x: G.X[s], y: G.Y[s], a: s, b: s }, known: null, knownT: -99, alertUntil: 0, sprint: false, nx: [], hunted: 0,
+      score: 0, scoreF: 0, zombie: false, patient: false, down: false, downT: 0, revive: 0, escaped: false, place: 0, finishT: null, catches: 0, infections: 0,
+      master: setup.masters.includes(q.id), vip: setup.vip.includes(q.id), team: setup.teams[q.id] != null ? setup.teams[q.id] : null,
+      hiddenUntil: 0, fadeUntil: 0, planqueEnd: 0, tx: undefined, ty: undefined,
+    });
+  }
+  G.adjBlocked.fill(0); G.lureFields.clear();
+  if (isHost) hostModeInit();
+}
+const meP = () => players.get(myId) || {};
+const isPrey = (q) => q.alive && !q.zombie && !q.master && !q.escaped && !q.down;
+function canMove() { const q = meP(); return q.alive && !q.master && !q.escaped && !q.down && game.planqueUntil <= game.t; }
+function mySkill() { const q = meP(); if (q.master) return "cri"; if (q.zombie || !isPrey(q)) return null; return game.R.skill; }
+
+function hostModeInit() {
+  const gm = game, n = players.size;
+  if (gm.mode === "extraction") gm.evac = { at: CFG.extractAt, node: -1, open: false, places: Math.max(1, Math.floor(n / 2)), taken: 0, end: 0 };
+  if (gm.mode === "patient") {
+    const ids = [...players.keys()]; gm.patientId = ids[(Math.random() * ids.length) | 0]; gm.turned = false;
+    const pz = players.get(gm.patientId);
+    setTimeout(() => { if (!game || game !== gm) return; const m = { t: "ev", k: "secret" }; if (gm.patientId === myId) handleEvent(m); else if (pz && pz.link) pz.link.send(m); }, 300);
+  }
+  if (gm.mode === "tresor") { gm.crateMax = 10 + 3 * n; gm.crateT = CFG.crateEvery; for (let i = 0; i < gm.crateMax; i++) spawnCrate(); }
+  if (gm.mode === "colline") { const h = pickNodeAround(G.X[G.spawn], G.Y[G.spawn], 150, 450); gm.hill = { node: h, x: G.X[h], y: G.Y[h], r: CFG.hillR, owner: null, movedAt: 0 }; gm.callT = CFG.hillCall; }
+  if (gm.mode === "course") gm.finish = G.finish != null ? { x: G.X[G.finish], y: G.Y[G.finish] } : null;
+}
+function spawnCrate() {
+  const gm = game;
+  const n = pickNodeAround(G.X[G.spawn], G.Y[G.spawn], 60, Math.min(900, (zone && zone.r) || 900), Math.random, (k) => gm.crates.every((c) => hyp(c.x, c.y, G.X[k], G.Y[k]) > 60));
+  const bonus = Math.random() < 0.25;
+  gm.crates.push({ x: G.X[n], y: G.Y[n], bonus, pts: bonus ? 5 : 10 });
 }
 function waveSpeed(k) { return Math.min(CFG.zSpeedMax, CFG.zSpeed + CFG.zSpeedInc * (k - 1)); }
 function spawnZombie(k, s) {
-  const ang = Math.random() * Math.PI * 2;
+  const rnd = game.rng, ang = rnd() * Math.PI * 2;
+  const masters = [...players.values()].filter((q) => q.master);
   game.zombies.push({
     x: G.X[s], y: G.Y[s], a: s, b: s, route: [],
-    speed: waveSpeed(k) * (0.9 + Math.random() * 0.2),
-    ox: Math.cos(ang) * 3, oy: Math.sin(ang) * 3, wob: Math.random() * 10,
-    role: k >= CFG.flankFrom && Math.random() < CFG.flankShare ? "flank" : "chase", hunt: false, tgt: -1,
+    speed: waveSpeed(k) * (0.9 + rnd() * 0.2),
+    ox: Math.cos(ang) * 3, oy: Math.sin(ang) * 3, wob: rnd() * 10,
+    role: k >= CFG.flankFrom && rnd() < CFG.flankShare ? "flank" : "chase", hunt: false, tgt: -1,
+    master: masters.length ? masters[game.zombies.length % masters.length].id : null, criUntil: 0,
   });
 }
 // Points d'apparition : carrefours au hasard, ni trop près ni trop loin du joueur le plus proche (par les rues)
 function pickSpawnNodes(count) {
-  const out = [];
+  const out = [], rnd = game.rng;
   const ok = (n, min, max) => {
     const d = G.dist[n]; if (!(d >= min && d <= max)) return false;
     return out.every((m) => hyp(G.X[n], G.Y[n], G.X[m], G.Y[m]) > 250);
   };
   for (const [min, max] of [[CFG.spawnMin, CFG.spawnMax], [CFG.spawnMin * 0.6, CFG.spawnMax * 2], [120, Infinity]]) {
     for (let tries = 0; tries < 400 && out.length < count; tries++) {
-      const n = (Math.random() * G.N) | 0;
+      const n = (rnd() * G.N) | 0;
       if (ok(n, min, max)) out.push(n);
     }
     if (out.length >= count) break;
@@ -1307,19 +1507,49 @@ function where(pt) {
   const i = ((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8;
   return `${dirs[i]}, à ${Math.round(Math.hypot(dx, dy) / 10) * 10} m`;
 }
-/* IA des zombies (calculée par l'hôte)
-   - Perception : un zombie ne te repère que dans un rayon limité (plus grand si tu sprintes : ça fait du bruit).
-   - Piste : sinon, il suit ta dernière position connue, rafraîchie toutes les quelques secondes.
-   - Cri : quand un zombie te repère, toute la horde te repère de plus loin pendant quelques secondes.
-   - Rabatteurs : une partie des zombies vise le carrefour vers lequel tu cours, pour te couper la route. */
-function senseFor(q) { return (q.sprint ? CFG.senseSprint : CFG.senseR) * (q.alertUntil > game.t ? CFG.alertMul : 1); }
+
+/* ---------------- IA des zombies (calculée par l'hôte) ----------------
+   - Perception limitée (plus grande si tu sprintes), piste rafraîchie toutes les quelques secondes,
+     cri qui alerte la horde, rabatteurs qui visent le carrefour devant toi.
+   - Les classes modifient la perception (Fantôme, Artificier) ; la planque fait perdre ta trace.
+   - Les zombies qui ne poursuivent personne sont attirés par les pétards, la colline et le ralliement de leur maître. */
+function senseFor(q) {
+  if (q.hiddenUntil > game.t) return 25;
+  const R = ROLES[q.role] || ROLES.coureur;
+  let r = q.sprint ? CFG.senseSprint * (R.noiseMul || 1) : CFG.senseR;
+  r *= R.senseMul || 1;
+  if (q.fadeUntil > game.t) r *= 0.5;
+  if (q.alertUntil > game.t) r *= CFG.alertMul;
+  return r;
+}
+function scentInterval(q) { const R = ROLES[q.role] || {}; return (q.sprint ? CFG.scentSprint : CFG.scentEvery) * (R.scentMul || 1); }
+// Un zombie qui entend un pétard (ou l'appel de la colline) va voir sur place, jusqu'à y arriver ou repérer quelqu'un.
+function lureFor(z) {
+  const t = game.t;
+  if (z.inv && z.invUntil > t) return "all";
+  z.inv = false;
+  for (const l of game.lures) if (l.grp === "all" && l.until > t && hyp(z.x, z.y, l.x, l.y) < l.range) { z.inv = true; z.invUntil = t + 90; return "all"; }
+  if (z.master) { const m = players.get(z.master); if (m && m.rally) return "m:" + z.master; }
+  return null;
+}
+function lureField(grp) {
+  let F = G.lureFields.get(grp);
+  if (!F || F.dirty) {
+    if (!F) { F = { dist: new Float64Array(G.N), next: new Int32Array(G.N), owner: new Int16Array(G.N) }; G.lureFields.set(grp, F); }
+    let srcs;
+    if (grp === "all") srcs = game.lures.filter((l) => l.grp === "all" && l.keep > game.t).map((l) => ({ x: l.x, y: l.y, a: l.node, b: l.node }));
+    else { const m = players.get(grp.slice(2)); srcs = m && m.rally ? [{ x: m.rally.x, y: m.rally.y, a: m.rally.node, b: m.rally.node }] : []; }
+    computeField(srcs, F); F.dirty = false;
+  }
+  return F;
+}
+function lureChanged(grp) { const F = G.lureFields.get(grp); if (F) F.dirty = true; }
 function zombieThink(z) {
   const gm = game, T = gm.targets, A = gm.alive;
-  if (!T.length) { z.route = []; return; }
   // perception : le joueur le plus proche qu'il perçoit
   let best = -1, bd = Infinity;
   for (let i = 0; i < A.length; i++) {
-    const q = A[i]; if (!q.alive) continue;
+    const q = A[i]; if (!isPrey(q)) continue;
     const d = hyp(z.x, z.y, q.x, q.y);
     if (d < senseFor(q) * (z.hunt && z.tgt === i ? 1.4 : 1) && d < bd) { bd = d; best = i; }
   }
@@ -1327,17 +1557,22 @@ function zombieThink(z) {
     if (!z.hunt || z.tgt !== best) { const q = A[best]; q.alertUntil = gm.t + CFG.alertTime; q.knownT = -99; } // il hurle
     z.hunt = true; z.tgt = best;
   } else { z.hunt = false; z.tgt = -1; }
-  // sur la même rue que sa proie : droit dessus
-  if (z.hunt) { const P = T[z.tgt]; if (P && sameEdge(z, P)) { z.route = [{ x: P.x, y: P.y, n: -1, ea: P.a, eb: P.b }]; return; } }
-  // choix du champ à suivre
-  let F = G;
-  if (z.hunt) { if (z.role === "flank" && bd > CFG.flankClose && gm.ahead.length) F = G.F3; }
-  else if (gm.known.length) F = G.F2;
-  step(z, F);
+  if (z.hunt) {
+    z.inv = false;
+    const P = T[z.tgt];
+    if (P && sameEdge(z, P) && !edgeBlocked(P.a, P.b)) { z.route = [{ x: P.x, y: P.y, n: -1, ea: P.a, eb: P.b }]; return; }
+    step(z, z.role === "flank" && bd > CFG.flankClose && gm.ahead.length ? G.F3 : G); return;
+  }
+  // pas de proie en vue : attiré par un pétard, la colline ou le ralliement de son maître
+  const grp = lureFor(z);
+  if (grp) { step(z, lureField(grp), true); return; }
+  if (!T.length) { z.route = []; return; }
+  step(z, gm.known.length ? G.F2 : G);
 }
-function step(z, F) {
+function step(z, F, stay) {
   if (z.a === z.b) {
     let nx = F.next[z.a];
+    if (nx < 0 && stay) { z.route = []; z.inv = false; return; } // arrivé sur place : il reprend la piste
     if (nx < 0 && F !== G) { F = G; nx = G.next[z.a]; } // arrivé au point visé : on reprend la poursuite directe
     if (nx < 0) {
       const P = game.targets[G.owner[z.a]] || game.targets[0]; if (!P) { z.route = []; return; }
@@ -1347,6 +1582,7 @@ function step(z, F) {
   } else {
     const da = hyp(z.x, z.y, G.X[z.a], G.Y[z.a]) + F.dist[z.a];
     const db = hyp(z.x, z.y, G.X[z.b], G.Y[z.b]) + F.dist[z.b];
+    if (!isFinite(da) && !isFinite(db)) { z.route = []; return; }
     const t = da < db ? z.a : z.b;
     z.route = [{ x: G.X[t], y: G.Y[t], n: t }];
   }
@@ -1362,125 +1598,431 @@ function aheadOf(q) {
   }
   return pick >= 0 ? { x: G.X[pick], y: G.Y[pick], a: pick, b: pick } : q.sp;
 }
-// Mon personnage (chaque joueur le déplace lui-même)
-function moveMe(dt) {
-  const gm = game, P = gm.player;
-  if (!P.alive) { gm.sprinting = false; return; }
-  const moving = P.route.length > 0;
-  const wantSprint = gm.sprint && moving && P.stamina > 0;
-  if (wantSprint) P.stamina = Math.max(0, P.stamina - CFG.drain * dt);
-  else if (!gm.sprint || !moving) P.stamina = Math.min(gm.R.stamina, P.stamina + CFG.regen * gm.R.regenMul * dt);
-  advance(P, CFG.runSpeed * gm.R.speedMul * (wantSprint ? CFG.sprintMul : 1) * dt);
-  gm.sprinting = wantSprint;
+
+/* ---------------- Rues bloquées (barricades) ---------------- */
+function edgeIdx(a, b) { for (let p = G.adjStart[a]; p < G.adjStart[a + 1]; p++) if (G.adjTo[p] === b) return p; return -1; }
+function edgeBlocked(a, b) { if (a === b) return false; const p = edgeIdx(a, b); return p >= 0 && !!G.adjBlocked[p]; }
+function setBlocked(a, b, v) {
+  const p = edgeIdx(a, b), q = edgeIdx(b, a);
+  if (p >= 0) G.adjBlocked[p] = v ? 1 : 0; if (q >= 0) G.adjBlocked[q] = v ? 1 : 0;
+  for (const F of G.lureFields.values()) F.dirty = true;
+  if (game) { game.forceFields = true; if (v) rerouteMe(); }
 }
-// Simulation du monde (hôte uniquement)
+// Si mon chemin passe par une rue qui vient d'être bloquée, je recalcule un itinéraire vers la même destination
+function rerouteMe() {
+  const P = game.player; if (!P.route.length) return;
+  let prev = P.a, crosses = false;
+  for (const w of P.route) { if (w.n >= 0) { if (prev !== w.n && edgeBlocked(prev, w.n)) { crosses = true; break; } prev = w.n; } }
+  if (!crosses) return;
+  const last = P.route[P.route.length - 1];
+  const T = last.n >= 0 ? { x: last.x, y: last.y, a: last.n, b: last.n } : { x: last.x, y: last.y, a: last.ea, b: last.eb };
+  const r = route(P, T); P.route = r || [];
+  if (!r) banner("Une barricade bloque ton chemin", false, 2000);
+}
+function applyBars(list) { // invités : on aligne les rues bloquées sur la liste de l'hôte
+  const want = new Set(list.map(([a, b]) => a + "_" + b));
+  for (const [a, b] of game.bars) if (!want.has(a + "_" + b)) setBlocked(a, b, false);
+  const had = new Set(game.bars.map(([a, b]) => a + "_" + b));
+  for (const [a, b] of list) if (!had.has(a + "_" + b)) setBlocked(a, b, true);
+  game.bars = list.map((x) => x.slice());
+}
+
+/* ---------------- Compétences ---------------- */
+function useSkill() {
+  if (!game || state !== "play") return;
+  const id = mySkill(); if (!id) return;
+  const S = SKILLS[id], gm = game;
+  if (gm.targeting) { gm.targeting = null; mapEl.classList.remove("aiming"); return; }
+  if (gm.t < gm.skillReadyAt) { banner(`${S.name} : encore ${Math.ceil(gm.skillReadyAt - gm.t)} s`, false, 1200); return; }
+  if (S.target) { gm.targeting = id; mapEl.classList.add("aiming"); banner(`${S.name} : clique sur la carte (${S.range} m max) · Échap pour annuler`, false, 2500); return; }
+  gm.skillReadyAt = gm.t + S.cd;
+  if (id === "rush") gm.rushUntil = gm.t + S.dur;
+  if (id === "drone") gm.droneUntil = gm.t + S.dur;
+  if (id === "planque") { gm.planqueUntil = gm.t + S.dur; gm.player.route = []; sendSkill({ k: "planque" }); }
+  if (id === "cri") sendSkill({ k: "cri" });
+  banner(`${S.name} !`, false, 1200);
+}
+function fireTarget(ll) {
+  const gm = game, id = gm.targeting, S = SKILLS[id]; if (!S) return;
+  const p = toXY(ll), T = snap(p.x, p.y, 120);
+  if (!T) { banner("Vise une rue", false, 1500); return; }
+  if (hyp(T.x, T.y, gm.player.x, gm.player.y) > S.range) { banner(`Trop loin : ${S.range} m maximum`, false, 1500); return; }
+  gm.targeting = null; mapEl.classList.remove("aiming"); gm.skillReadyAt = gm.t + S.cd;
+  if (id === "petard") { const n = hyp(T.x, T.y, G.X[T.ea], G.Y[T.ea]) < hyp(T.x, T.y, G.X[T.eb], G.Y[T.eb]) ? T.ea : T.eb; sendSkill({ k: "petard", node: n }); banner("Pétard lancé !", false, 1500); }
+  if (id === "barricade") { sendSkill({ k: "barricade", a: T.ea, b: T.eb }); banner("Barricade posée", false, 1500); }
+}
+function sendSkill(m) { m.t = "skill"; if (isHost) hostSkill(myId, m); else toHost(m); }
+function hostSkill(id, m) {
+  const gm = game, q = players.get(id); if (!gm || !q || state !== "play") return;
+  const okNode = (n) => Number.isInteger(n) && n >= 0 && n < G.N;
+  if (m.k === "planque" && isPrey(q) && q.role === "fantome") { q.hiddenUntil = gm.t + SKILLS.planque.dur; q.planqueEnd = gm.t + SKILLS.planque.dur; }
+  else if (m.k === "petard" && q.role === "artificier" && okNode(m.node)) {
+    gm.lures.push({ x: G.X[m.node], y: G.Y[m.node], node: m.node, until: gm.t + SKILLS.petard.dur, keep: gm.t + SKILLS.petard.dur + 90, range: CFG.lureRange, grp: "all", kind: "petard" });
+    lureChanged("all");
+  } else if (m.k === "barricade" && q.role === "saboteur" && okNode(m.a) && okNode(m.b) && m.a !== m.b && edgeIdx(m.a, m.b) >= 0) {
+    gm.bars.push([m.a, m.b, gm.t + SKILLS.barricade.dur]); setBlocked(m.a, m.b, true);
+  } else if (m.k === "cri" && q.master) {
+    for (const z of gm.zombies) if (z.master === id) z.criUntil = gm.t + SKILLS.cri.dur;
+    emit({ t: "ev", k: "cri", name: q.name });
+  }
+}
+function hostRally(id, m) {
+  const q = players.get(id); if (!q || !q.master || !Number.isInteger(m.node) || m.node < 0 || m.node >= G.N) return;
+  q.rally = { node: m.node, x: G.X[m.node], y: G.Y[m.node] }; lureChanged("m:" + id);
+}
+
+/* ---------------- Mon personnage ---------------- */
+function moveMe(dt) {
+  const gm = game, P = gm.player, q = meP();
+  gm.sprinting = false;
+  if (!canMove()) return;
+  if (q.zombie) { advance(P, CFG.zPlayerSpeed * dt); return; }
+  const R = gm.R, moving = P.route.length > 0, rush = gm.rushUntil > gm.t;
+  if (gm.sprintLock && !gm.sprint) gm.sprintLock = false;
+  let want = moving && (rush || (gm.sprint && !gm.sprintLock && P.stamina > 0));
+  if (want && !rush && R.sprintCap) { gm.sprintRun += dt; if (gm.sprintRun > R.sprintCap) { gm.sprintLock = true; want = false; } }
+  if (!want) gm.sprintRun = 0;
+  if (want && !rush) P.stamina = Math.max(0, P.stamina - CFG.drain * dt);
+  else if (!want) P.stamina = Math.min(R.stamina, P.stamina + CFG.regen * R.regenMul * dt);
+  let spd = CFG.runSpeed * R.speedMul * (want ? CFG.sprintMul : 1);
+  if (q.vip) spd *= CFG.vipSpeed;
+  if (gm.speedBonusUntil > gm.t) spd *= 1.3;
+  advance(P, spd * dt);
+  gm.sprinting = want;
+}
+
+/* ---------------- Simulation du monde (hôte) ---------------- */
 function hostUpdate(dt) {
-  const gm = game;
-  const mine = me(); const P = gm.player;
-  if (mine.alive) {
+  const gm = game, mine = me(), P = gm.player;
+  if (mine.alive && !mine.master && !mine.escaped) {
     mine.x = P.x; mine.y = P.y; mine.dir = P.dir; mine.trail = P.trail; mine.sp = { x: P.x, y: P.y, a: P.a, b: P.b };
     mine.sprint = !!gm.sprinting; mine.nx = P.route.filter((w) => w.n >= 0).slice(0, 4).map((w) => w.n);
   }
-  const alive = [...players.values()].filter((q) => q.alive && q.sp);
-  // Piste : dernière position connue de chaque joueur, rafraîchie régulièrement (plus souvent s'il sprinte)
-  let knownDirty = false;
-  for (const q of alive) if (!q.known || gm.t - q.knownT >= (q.sprint ? CFG.scentSprint : CFG.scentEvery)) { q.known = q.sp; q.knownT = gm.t; knownDirty = true; }
-  // Champs de poursuite : direct (positions réelles), piste (positions connues), rabatteurs (carrefours devant)
+  modeTick(dt);
+  if (gm.ended) return;
+  // fin des effets temporaires
+  for (const l of gm.lures) if (l.keep <= gm.t) { l.dead = true; lureChanged(l.grp); }
+  gm.lures = gm.lures.filter((l) => !l.dead);
+  for (const b of gm.bars) if (b[2] <= gm.t) { setBlocked(b[0], b[1], false); b.dead = true; }
+  gm.bars = gm.bars.filter((b) => !b.dead);
+  const prey = [...players.values()].filter((q) => isPrey(q) && q.sp);
+  // Piste : dernière position connue de chaque joueur (pas mise à jour pendant une planque)
+  let knownDirty = gm.forceFields; gm.forceFields = false;
+  for (const q of prey) if (q.hiddenUntil <= gm.t && (!q.known || gm.t - q.knownT >= scentInterval(q))) { q.known = q.sp; q.knownT = gm.t; knownDirty = true; }
   gm.fieldT -= dt;
-  if ((gm.fieldT <= 0 || knownDirty) && alive.length) {
-    const aliveChanged = gm.alive.length !== alive.length || alive.some((q, i) => gm.alive[i] !== q);
-    gm.alive = alive; gm.targets = alive.map((q) => q.sp); computeField(gm.targets);
-    if (knownDirty || aliveChanged) { gm.known = alive.map((q) => q.known); computeField(gm.known, G.F2); } // la piste ne change que toutes les quelques secondes
-    gm.f3 = (gm.f3 || 0) + 1;
-    if (gm.f3 % 2 === 0 || aliveChanged) { gm.ahead = alive.map(aheadOf); computeField(gm.ahead, G.F3); } // rabatteurs : 2 fois par seconde suffit
+  if (gm.fieldT <= 0 || knownDirty) {
+    const changed = gm.alive.length !== prey.length || prey.some((q, i) => gm.alive[i] !== q);
+    gm.alive = prey; gm.targets = prey.map((q) => q.sp);
+    if (prey.length) {
+      computeField(gm.targets);
+      if (knownDirty || changed) { gm.known = prey.map((q) => q.known || q.sp); computeField(gm.known, G.F2); }
+      gm.f3 = (gm.f3 || 0) + 1;
+      if (gm.f3 % 2 === 0 || changed) { gm.ahead = prey.map(aheadOf); computeField(gm.ahead, G.F3); }
+    } else { gm.known = []; gm.ahead = []; }
     gm.fieldT = CFG.fieldEvery;
   }
   // Vagues : la 1re sort du point zéro, les suivantes d'endroits aléatoires annoncés à l'avance
-  if (!gm.upcoming && gm.t >= gm.nextWave - CFG.waveWarn) {
+  if (!gm.upcoming && gm.t >= gm.nextWave - CFG.waveWarn && prey.length) {
     const k = gm.wave + 1;
     const nodes = k === 1 ? [G.spawn] : pickSpawnNodes(k >= CFG.splitFrom ? 2 : 1);
     gm.upcoming = { at: gm.nextWave, nodes, pts: nodes.map((n) => ({ x: G.X[n], y: G.Y[n] })) };
     if (k > 1) emit({ t: "ev", k: "warn", wave: k, pts: gm.upcoming.pts, left: CFG.waveWarn });
   }
-  if (gm.t >= gm.nextWave) {
-    gm.wave++; const n = CFG.waveBase + CFG.waveInc * (gm.wave - 1) + Math.max(0, players.size - 1) * 2; // un peu plus de zombies par joueur
-    const nodes = gm.upcoming ? gm.upcoming.nodes : [G.spawn];
+  if (gm.upcoming && gm.t >= gm.nextWave) {
+    gm.wave++;
+    const n = CFG.waveBase + CFG.waveInc * (gm.wave - 1) + Math.max(0, players.size - 1) * 2;
+    const nodes = gm.upcoming.nodes;
     for (let i = 0; i < n; i++) gm.pending.push({ t: gm.t + Math.floor(i / nodes.length) * 0.35, node: nodes[i % nodes.length] });
     for (const nd of nodes) if (nd !== G.spawn) gm.nests.push({ x: G.X[nd], y: G.Y[nd] });
     gm.upcoming = null;
-    gm.nextWave += CFG.waveEvery;
+    gm.nextWave += gm.mode === "aube" ? CFG.waveEvery * 0.9 : CFG.waveEvery;
     emit({ t: "ev", k: "wave", wave: gm.wave, n });
   }
   while (gm.pending.length && gm.pending[0].t <= gm.t) { const p = gm.pending.shift(); spawnZombie(gm.wave, p.node); }
   // Zombies
-  if (gm.targets.length) for (const z of gm.zombies) {
-    let left = z.speed * dt;
-    for (let i = 0; i < 4 && left > 1e-6; i++) { zombieThink(z); left = advance(z, left); }
+  for (const z of gm.zombies) {
+    let left = z.speed * (z.criUntil > gm.t ? 1.4 : 1) * dt;
+    for (let i = 0; i < 4 && left > 1e-6; i++) { zombieThink(z); if (!z.route.length) break; left = advance(z, left); }
   }
-  // Captures
-  for (const q of alive) {
-    for (const z of gm.zombies) if (hyp(z.x, z.y, q.x, q.y) < CFG.catchDist) { killPlayer(q); break; }
+  // Captures par les zombies
+  for (const q of prey) for (const z of gm.zombies) if (hyp(z.x, z.y, q.x, q.y) < CFG.catchDist) {
+    if (z.master) { const m = players.get(z.master); if (m) m.catches++; }
+    catchPlayer(q, null); break;
   }
+  // Captures par les joueurs infectés (patient zéro)
+  for (const zp of players.values()) if (zp.alive && zp.zombie) for (const q of prey) if (isPrey(q) && hyp(zp.x, zp.y, q.x, q.y) < CFG.catchDist) catchPlayer(q, zp);
+  if (gm.ended) return;
   // Combien de zombies traquent chaque joueur (affiché dans le HUD)
   for (const q of players.values()) q.hunted = 0;
   for (const z of gm.zombies) if (z.hunt && gm.alive[z.tgt]) gm.alive[z.tgt].hunted++;
   gm.huntedMe = mine.hunted || 0;
-  // État du monde envoyé aux joueurs
+  // État du monde : repères du mode et envoi aux joueurs
   gm.sendT -= dt;
-  if (net && gm.sendT <= 0) {
+  if (gm.sendT <= 0) {
     gm.sendT = 0.1;
-    const r1 = (v) => Math.round(v * 10) / 10;
-    broadcast({
-      t: "snap", time: gm.t, w: gm.wave, nw: gm.wave === 0 ? gm.nextWave - gm.t : null,
-      z: gm.zombies.map((z) => [Math.round(z.x + z.ox), Math.round(z.y + z.oy)]),
-      p: [...players.values()].map((q) => [q.id, r1(q.x), r1(q.y), Math.round(q.dir * 100) / 100, q.alive ? 1 : 0, q.hunted || 0]),
-      up: gm.upcoming && gm.wave > 0 ? { left: gm.upcoming.at - gm.t, pts: gm.upcoming.pts } : null,
-      nests: gm.nests,
-    });
+    gm.marks = buildMarks();
+    if (net) {
+      const r1 = (v) => Math.round(v * 10) / 10;
+      broadcast({
+        t: "snap", time: gm.t, w: gm.wave, nw: gm.wave === 0 ? gm.nextWave - gm.t : null,
+        z: gm.zombies.map((z) => [Math.round(z.x + z.ox), Math.round(z.y + z.oy)]),
+        p: [...players.values()].map((q) => [q.id, r1(q.x), r1(q.y), Math.round(q.dir * 100) / 100, q.alive ? 1 : 0, q.hunted || 0, flagsOf(q), q.score || 0]),
+        up: gm.upcoming && gm.wave > 0 ? { left: gm.upcoming.at - gm.t, pts: gm.upcoming.pts } : null,
+        nests: gm.nests, mk: gm.marks, bars: gm.bars.map(([a, b, u]) => [a, b, Math.max(0, Math.round(u - gm.t))]), hud: gm.hud,
+      });
+    }
   }
+}
+function flagsOf(q) {
+  return (q.zombie ? 1 : 0) | (q.down ? 2 : 0) | (q.escaped ? 4 : 0) | (q.vip ? 8 : 0) | (q.master ? 16 : 0) | (q.team === 1 ? 32 : 0)
+    | (q.hiddenUntil > game.t ? 64 : 0) | (q.patient ? 128 : 0) | (q.team != null ? 256 : 0);
+}
+function applyFlags(q, f) {
+  q.zombie = !!(f & 1); q.down = !!(f & 2); q.escaped = !!(f & 4); q.vip = !!(f & 8); q.master = !!(f & 16);
+  q.team = f & 256 ? (f & 32 ? 1 : 0) : null; q.hidden = !!(f & 64); q.patient = !!(f & 128);
+}
+// Repères affichés sur la carte : [type, x, y, ...]
+function buildMarks() {
+  const gm = game, mk = [], R = Math.round;
+  if (gm.evac && gm.evac.node >= 0) mk.push(["evac", R(gm.evac.x), R(gm.evac.y), gm.evac.open ? 1 : 0, gm.evac.places - gm.evac.taken, Math.max(0, Math.ceil(gm.evac.open ? gm.evac.end - gm.t : gm.evac.at - gm.t))]);
+  for (const c of gm.crates) mk.push(["crate", R(c.x), R(c.y), c.bonus ? 1 : 0]);
+  if (gm.hill) mk.push(["hill", R(gm.hill.x), R(gm.hill.y), gm.hill.r, gm.hill.owner || ""]);
+  for (const d of gm.setup.dests || []) mk.push(["dest", R(d.x), R(d.y), d.team]);
+  if (gm.finish) mk.push(["finish", R(gm.finish.x), R(gm.finish.y)]);
+  for (const l of gm.lures) if (l.kind === "petard" && l.until > gm.t) mk.push(["lure", R(l.x), R(l.y), Math.max(0, Math.ceil(l.until - gm.t))]);
+  for (const q of players.values()) if (q.master && q.rally) mk.push(["rally", R(q.rally.x), R(q.rally.y), q.id]);
+  for (const q of players.values()) if (q.down) mk.push(["down", R(q.x), R(q.y), q.id, Math.round((q.revive / CFG.reviveTime) * 100), Math.max(0, Math.ceil(CFG.bleedOut - (gm.t - q.downT)))]);
+  return mk;
+}
+function catchPlayer(q, by) {
+  const gm = game; if (!isPrey(q) || gm.ended) return;
+  if (gm.mode === "patient") {
+    q.zombie = true; q.time = gm.t;
+    if (by) by.infections++; else { const pz = players.get(gm.patientId); if (pz) pz.infections++; }
+    emit({ t: "ev", k: "infected", id: q.id, name: q.name, by: by ? by.name : null });
+  } else if (gm.mode === "aube" && players.size > 1) {
+    q.down = true; q.downT = gm.t; q.revive = 0;
+    emit({ t: "ev", k: "down", id: q.id, name: q.name });
+  } else { killPlayer(q); return; }
+  checkEnd();
 }
 function killPlayer(q) {
   if (!q.alive || state !== "play") return;
-  q.alive = false; q.time = game.t;
+  q.alive = false; q.down = false; q.time = game.t;
+  if (game.mode === "tresor") q.score = Math.floor(q.score / 2);
   emit({ t: "ev", k: "dead", id: q.id, name: q.name, time: q.time });
   checkEnd();
 }
-// Fin de partie : en solo quand tu es rattrapé ; en multijoueur dès qu'il ne reste qu'un survivant (il gagne).
+
+/* ---------------- Règles des modes (hôte) ---------------- */
+function modeTick(dt) {
+  const gm = game, t = gm.t, all = [...players.values()], prey = all.filter(isPrey);
+  // fin de planque : les zombies perdent ta trace et partent sur une fausse piste
+  for (const q of all) if (q.planqueEnd && t >= q.planqueEnd) {
+    q.planqueEnd = 0; q.fadeUntil = t + 3;
+    const idx = gm.alive.indexOf(q);
+    for (const z of gm.zombies) if (z.hunt && z.tgt === idx && hyp(z.x, z.y, q.x, q.y) > 30) { z.hunt = false; z.tgt = -1; }
+    const n = pickNodeAround(q.x, q.y, 250, 450);
+    q.known = { x: G.X[n], y: G.Y[n], a: n, b: n }; q.knownT = t; gm.forceFields = true;
+  }
+  switch (gm.mode) {
+    case "extraction": {
+      const e = gm.evac;
+      if (e.node < 0 && t >= e.at - 30 && prey.length) {
+        // annoncée 30 s avant l'ouverture, entre 250 et 550 m (par les rues) du joueur le plus proche
+        let n = -1;
+        for (let i = 0; i < 800 && n < 0; i++) { const k = (Math.random() * G.N) | 0; if (G.dist[k] >= 250 && G.dist[k] <= 550) n = k; }
+        if (n < 0) n = pickNodeAround(G.X[G.spawn], G.Y[G.spawn], 250, 600);
+        Object.assign(e, { node: n, x: G.X[n], y: G.Y[n] });
+        emit({ t: "ev", k: "evacSoon", pt: { x: e.x, y: e.y }, places: e.places, left: Math.round(e.at - t) });
+      }
+      if (!e.open && t >= e.at) { e.open = true; e.end = t + CFG.extractOpen; emit({ t: "ev", k: "evacOpen", pt: { x: e.x, y: e.y }, places: e.places - e.taken, left: CFG.extractOpen }); }
+      if (e.open) for (const q of prey) if (e.taken < e.places && hyp(q.x, q.y, e.x, e.y) < CFG.goalR) {
+        q.escaped = true; q.time = t; q.place = ++e.taken;
+        emit({ t: "ev", k: "escaped", id: q.id, name: q.name, left: e.places - e.taken });
+      }
+      gm.hud = e.open ? { txt: "Évacuation ouverte", left: e.end - t, extra: `${e.places - e.taken} place${e.places - e.taken > 1 ? "s" : ""}` } : { txt: "Évacuation dans", left: e.at - t };
+      break;
+    }
+    case "patient": {
+      if (!gm.turned && t >= CFG.patientTurn) {
+        gm.turned = true; const q = players.get(gm.patientId);
+        if (q && isPrey(q)) { q.zombie = true; q.patient = true; q.time = t; emit({ t: "ev", k: "turn", id: q.id, name: q.name }); }
+      }
+      gm.hud = gm.turned ? { txt: "Les humains tiennent encore", left: CFG.patientEnd - t } : { txt: "Le patient zéro se révèle dans", left: CFG.patientTurn - t };
+      break;
+    }
+    case "tresor": {
+      gm.crateT -= dt;
+      if (gm.crateT <= 0) { gm.crateT = CFG.crateEvery; if (gm.crates.length < gm.crateMax) spawnCrate(); }
+      for (const q of prey) for (let i = gm.crates.length - 1; i >= 0; i--) {
+        const c = gm.crates[i]; if (hyp(q.x, q.y, c.x, c.y) >= CFG.crateR) continue;
+        gm.crates.splice(i, 1); q.score += c.pts;
+        const bonus = c.bonus ? ["stamina", "skill", "speed"][(Math.random() * 3) | 0] : null;
+        emit({ t: "ev", k: "crate", id: q.id, pts: c.pts, bonus });
+      }
+      gm.hud = { txt: "Fin de la chasse dans", left: CFG.modeDur - t };
+      break;
+    }
+    case "colline": {
+      const h = gm.hill;
+      if (t - h.movedAt >= CFG.hillMove) {
+        const n = pickNodeAround(h.x, h.y, 200, 550); Object.assign(h, { node: n, x: G.X[n], y: G.Y[n], movedAt: t });
+        emit({ t: "ev", k: "hillMove", pt: { x: h.x, y: h.y } });
+      }
+      const inside = prey.filter((q) => hyp(q.x, q.y, h.x, h.y) < h.r);
+      h.owner = inside.length === 1 ? inside[0].id : inside.length > 1 ? "*" : null;
+      if (inside.length === 1) { inside[0].scoreF += dt; inside[0].score = Math.floor(inside[0].scoreF); }
+      gm.callT -= dt;
+      if (gm.callT <= 0) { gm.callT = CFG.hillCall; gm.lures.push({ x: h.x, y: h.y, node: h.node, until: t + 8, keep: t + 95, range: 1500, grp: "all", kind: "hill" }); lureChanged("all"); emit({ t: "ev", k: "hillCall" }); }
+      gm.hud = { txt: "Fin dans", left: CFG.modeDur - t };
+      break;
+    }
+    case "escorte": {
+      for (const q of prey) if (q.vip) { const d = gm.setup.dests[q.team]; if (d && hyp(q.x, q.y, d.x, d.y) < CFG.goalR) { gm.escortWin = q.team; q.escaped = true; q.time = t; } }
+      gm.hud = { txt: "Escorte ton VIP jusqu'à sa destination", left: null };
+      break;
+    }
+    case "horde": gm.hud = { txt: "Les survivants doivent tenir encore", left: CFG.modeDur - t }; break;
+    case "aube": {
+      for (const q of all) if (q.alive && q.down) {
+        if (t - q.downT > CFG.bleedOut) { killPlayer(q); continue; }
+        const helper = prey.some((o) => o !== q && hyp(o.x, o.y, q.x, q.y) < CFG.reviveR);
+        q.revive = helper ? q.revive + dt : Math.max(0, q.revive - dt * 0.5);
+        if (q.revive >= CFG.reviveTime) { q.down = false; q.revive = 0; q.known = null; emit({ t: "ev", k: "revived", id: q.id, name: q.name }); }
+      }
+      gm.hud = { txt: "L'aube se lève dans", left: CFG.aubeDur - t };
+      break;
+    }
+    case "course": {
+      for (const q of prey) if (gm.finish && hyp(q.x, q.y, gm.finish.x, gm.finish.y) < CFG.goalR) {
+        q.escaped = true; q.finishT = t; q.time = t; emit({ t: "ev", k: "finish", id: q.id, name: q.name, time: t });
+      }
+      gm.hud = { txt: "Rejoins l'arrivée", left: null };
+      break;
+    }
+    case "defi": gm.hud = { txt: `Défi du ${todayKey().split("-").reverse().join("/")}`, left: null }; break;
+    default: gm.hud = null;
+  }
+  checkEnd();
+}
+// Fin de partie selon le mode
 function checkEnd() {
-  if (!isHost || state !== "play") return;
-  const all = [...players.values()], alive = all.filter((q) => q.alive);
-  const multi = !!net && all.length > 1;
-  if (alive.length > (multi ? 1 : 0)) return;
-  const winner = multi && alive.length === 1 ? alive[0] : null;
-  if (winner) winner.time = game.t;
-  const results = all
-    .map((q) => ({ id: q.id, name: q.name, color: q.color, role: q.role, time: q.time, trail: q.trail }))
-    .sort((a, b) => (winner && a.id === winner.id ? -1 : winner && b.id === winner.id ? 1 : b.time - a.time));
-  const msg = { t: "over", results, wave: game.wave, winner: winner ? winner.id : null };
-  broadcast(msg); showResults(results, game.wave, msg.winner);
+  if (!isHost || state !== "play" || !game || game.ended) return;
+  const gm = game, t = gm.t, all = [...players.values()], prey = all.filter(isPrey);
+  const multi = !!net && all.length > 1, win = new Set();
+  let done = false;
+  switch (gm.mode) {
+    case "survie": case "defi":
+      if (multi && gm.mode === "survie" ? prey.length <= 1 : prey.length === 0) { done = true; if (multi && prey.length === 1 && gm.mode === "survie") win.add(prey[0].id); }
+      break;
+    case "extraction": {
+      const e = gm.evac;
+      if (!prey.length || (e.open && (t >= e.end || e.taken >= e.places))) { done = true; all.filter((q) => q.escaped).forEach((q) => win.add(q.id)); }
+      break;
+    }
+    case "patient": {
+      const humans = all.filter((q) => isPrey(q));
+      if (!humans.length) { done = true; if (gm.patientId) win.add(gm.patientId); }
+      else if (t >= CFG.patientEnd) { done = true; humans.forEach((q) => win.add(q.id)); }
+      break;
+    }
+    case "tresor": case "colline": {
+      const goal = gm.mode === "colline" && all.some((q) => q.score >= CFG.hillGoal);
+      if (!prey.length || t >= CFG.modeDur || goal) {
+        done = true; const best = Math.max(0, ...all.map((q) => q.score));
+        if (best > 0) all.filter((q) => q.score === best).forEach((q) => win.add(q.id));
+      }
+      break;
+    }
+    case "escorte": {
+      const vipOk = [0, 1].map((tm) => all.some((q) => q.vip && q.team === tm && q.alive));
+      if (gm.escortWin != null) { done = true; all.filter((q) => q.team === gm.escortWin).forEach((q) => win.add(q.id)); }
+      else if (!vipOk[0] || !vipOk[1]) {
+        done = true; const tm = vipOk[0] ? 0 : vipOk[1] ? 1 : null;
+        if (tm != null) all.filter((q) => q.team === tm).forEach((q) => win.add(q.id));
+      }
+      break;
+    }
+    case "horde": {
+      const surv = all.filter((q) => !q.master);
+      if (!surv.some(isPrey)) { done = true; all.filter((q) => q.master).forEach((q) => win.add(q.id)); }
+      else if (t >= CFG.modeDur) { done = true; surv.filter(isPrey).forEach((q) => win.add(q.id)); }
+      break;
+    }
+    case "aube":
+      if (!prey.length) done = true;
+      else if (t >= CFG.aubeDur) { done = true; all.forEach((q) => win.add(q.id)); }
+      break;
+    case "course":
+      if (!prey.length) {
+        done = true; const fin = all.filter((q) => q.finishT != null).sort((a, b) => a.finishT - b.finishT);
+        if (fin[0]) win.add(fin[0].id);
+      }
+      break;
+  }
+  if (!done) return;
+  gm.ended = true;
+  for (const q of all) if (isPrey(q) || (q.alive && q.zombie && !q.time) || (q.alive && q.down)) q.time = q.time || t;
+  for (const q of all) if (isPrey(q)) q.time = t;
+  const msg = { t: "over", rows: buildRows(win), wave: gm.wave, mode: gm.mode, zombies: gm.zombies.length };
+  broadcast(msg); showResults(msg);
+}
+function buildRows(win) {
+  const gm = game, all = [...players.values()], scoreMode = !!gm.M.score;
+  const rows = all.map((q) => {
+    let value, sort, note = "";
+    if (q.master) { value = `${q.catches} victime${q.catches > 1 ? "s" : ""}`; sort = -q.catches; note = "Maître de la horde"; }
+    else if (scoreMode) { value = `${q.score} pts`; sort = -(q.score * 1e5 + q.time); }
+    else if (gm.mode === "course") { value = q.finishT != null ? fmtTime(q.finishT) : "Abandon"; sort = q.finishT != null ? q.finishT : 1e7 - q.time; }
+    else { value = fmtTime(q.time || 0); sort = -(q.time || 0); }
+    if (gm.mode === "extraction" && q.escaped) { note = `Évacué (${q.place}${q.place === 1 ? "er" : "e"})`; sort = -1e7 + q.place; }
+    if (gm.mode === "patient") note = q.patient ? `Patient zéro · ${q.infections} infecté${q.infections > 1 ? "s" : ""}` : q.zombie ? "Infecté" : "Humain";
+    if (gm.mode === "escorte") note = `Équipe ${TEAMS[q.team] ? TEAMS[q.team].name : ""}${q.vip ? " · VIP" : ""}`;
+    if (gm.mode === "aube" && q.down) note = "À terre";
+    if (gm.mode === "course" && q.finishT != null) note = "Arrivé";
+    return { id: q.id, name: q.name, color: q.color, role: q.master ? "" : q.role, value, note, win: win.has(q.id), time: q.time || 0, trail: q.trail || 0, score: q.score || 0, sort };
+  });
+  rows.sort((a, b) => (b.win - a.win) || (a.sort - b.sort));
+  return rows;
 }
 // Un message de l'hôte est appliqué localement et envoyé à tous
 function emit(m) { broadcast(m); handleEvent(m); }
 function handleEvent(m) {
   if (!game) return;
-  if (m.k === "warn") {
-    if (!isHost) game.upcoming = { at: game.t + m.left, pts: m.pts };
-    banner(`Vague ${m.wave} dans ${m.left} s · ${m.pts.map(where).join(" et ")}`, true, 3500);
-  } else if (m.k === "wave") {
-    game.wave = m.wave; if (!isHost) game.upcoming = null;
-    banner(m.wave === 1 ? "Ils sortent du point zéro" : `Vague ${m.wave} · ${m.n} zombies`, true, 2600);
-    flash();
-  } else if (m.k === "dead") {
-    const q = players.get(m.id); if (q) { q.alive = false; q.time = m.time; }
-    if (m.id === myId) myDeath();
-    else banner(`${m.name} s'est fait rattraper`, true, 2600);
+  const mine = m.id === myId;
+  switch (m.k) {
+    case "warn": if (!isHost) game.upcoming = { at: game.t + m.left, pts: m.pts }; banner(`Vague ${m.wave} dans ${m.left} s · ${m.pts.map(where).join(" et ")}`, true, 3500); break;
+    case "wave": game.wave = m.wave; if (!isHost) game.upcoming = null; banner(m.wave === 1 ? "Ils sortent du point zéro" : `Vague ${m.wave} · ${m.n} zombies`, true, 2600); flash(); break;
+    case "dead": { const q = players.get(m.id); if (q) { q.alive = false; q.time = m.time; } if (mine) myDeath(); else banner(`${m.name} s'est fait rattraper`, true, 2600); break; }
+    case "secret": game.secret = true; banner("Tu es le patient zéro. Tu te transformes dans 2 min : reste discret.", true, 6000); break;
+    case "turn": { const q = players.get(m.id); if (q) { q.zombie = true; q.patient = true; } if (mine) { game.player.route = []; banner("Tu te transformes ! Attrape les humains.", true, 4000); } else banner(`${m.name} était le patient zéro !`, true, 4000); flash(); break; }
+    case "infected": { const q = players.get(m.id); if (q) q.zombie = true; if (mine) { game.player.route = []; banner("Tu es infecté : attrape les derniers humains !", true, 4000); flash(); } else banner(`${m.name} a été infecté${m.by ? " par " + m.by : ""}`, true, 2600); break; }
+    case "down": { const q = players.get(m.id); if (q) q.down = true; if (mine) { game.player.route = []; banner("À terre ! Un coéquipier doit rester 3 s près de toi.", true, 4000); flash(); } else banner(`${m.name} est à terre : va le relever !`, true, 3000); break; }
+    case "revived": { const q = players.get(m.id); if (q) q.down = false; banner(mine ? "Relevé ! Cours !" : `${m.name} est relevé`, false, 2500); break; }
+    case "evacSoon": banner(`Évacuation dans ${m.left} s · ${where(m.pt)} · ${m.places} place${m.places > 1 ? "s" : ""}`, true, 4000); break;
+    case "evacOpen": banner(`Évacuation ouverte ${m.left} s · ${where(m.pt)}`, true, 4000); flash(); break;
+    case "escaped": banner(mine ? "Évacué ! Tu es sauvé." : `${m.name} est évacué · ${m.left} place${m.left > 1 ? "s" : ""} restante${m.left > 1 ? "s" : ""}`, !mine, 3000); if (mine) { game.player.route = []; map.dragging.enable(); } break;
+    case "crate":
+      if (mine) {
+        const B = { stamina: "endurance pleine", skill: "compétence rechargée", speed: "vitesse +30 % pendant 6 s" };
+        banner(`+${m.pts} points${m.bonus ? " · " + B[m.bonus] : ""}`, false, 1800);
+        if (m.bonus === "stamina") game.player.stamina = game.R.stamina;
+        if (m.bonus === "skill") game.skillReadyAt = game.t;
+        if (m.bonus === "speed") game.speedBonusUntil = game.t + 6;
+      }
+      break;
+    case "hillMove": banner(`La colline se déplace · ${where(m.pt)}`, false, 3000); break;
+    case "hillCall": banner("La colline attire la horde !", true, 2200); break;
+    case "finish": banner(mine ? `Arrivé en ${fmtTime(m.time)} !` : `${m.name} est arrivé en ${fmtTime(m.time)}`, false, 3000); if (mine) map.dragging.enable(); break;
+    case "cri": if (!meP().master) banner(`${m.name} hurle : la horde accélère !`, true, 2000); break;
   }
 }
 function myDeath() {
-  const P = game.player; P.alive = false; P.route = []; game.sprint = false; drawPts = null; flash();
+  const P = game.player; P.alive = false; P.route = []; game.sprint = false; drawPts = null; game.targeting = null; flash();
   if (!net) return; // en solo, l'écran de fin arrive tout de suite
-  const left = [...players.values()].filter((q) => q.alive).length;
-  banner(left ? `Rattrapé ! Tu observes la fin de la partie (${left} encore en vie)` : "Rattrapé !", true, 0);
+  const left = [...players.values()].filter(isPrey).length;
+  banner(left ? `Rattrapé ! Tu observes la fin de la partie (${left} encore en jeu)` : "Rattrapé !", true, 0);
   map.dragging.enable();
 }
 // Invités : application de l'état reçu
@@ -1488,24 +2030,29 @@ function applySnap(m) {
   if (!game || !G) return;
   game.wave = m.w;
   while (game.zombies.length < m.z.length) { const [x, y] = m.z[game.zombies.length]; game.zombies.push({ x, y, tx: x, ty: y, ox: 0, oy: 0, wob: Math.random() * 10 }); }
+  game.zombies.length = m.z.length;
   m.z.forEach(([x, y], i) => { game.zombies[i].tx = x; game.zombies[i].ty = y; });
-  for (const [id, x, y, dir, alive, hunted] of m.p) {
-    if (id === myId) { game.huntedMe = hunted || 0; continue; }
+  for (const [id, x, y, dir, alive, hunted, flags, score] of m.p) {
     const q = players.get(id); if (!q) continue;
+    applyFlags(q, flags || 0); q.alive = !!alive; q.score = score || 0;
+    if (id === myId) { game.huntedMe = hunted || 0; continue; }
     if (q.tx === undefined) { q.x = x; q.y = y; }
-    q.tx = x; q.ty = y; q.dir = dir; q.alive = !!alive;
+    q.tx = x; q.ty = y; q.dir = dir;
   }
   game.upcoming = m.up ? { at: game.t + m.up.left, pts: m.up.pts } : null;
   game.nests = m.nests || [];
   game.hostNw = m.nw;
+  game.marks = m.mk || [];
+  game.hud = m.hud || null;
+  applyBars(m.bars || []);
 }
 function guestUpdate(dt) {
-  const gm = game, P = gm.player;
+  const gm = game, P = gm.player, mine = meP();
   const k = Math.min(1, dt * 12);
   for (const z of gm.zombies) { z.x += (z.tx - z.x) * k; z.y += (z.ty - z.y) * k; }
   for (const q of players.values()) if (q.id !== myId && q.tx !== undefined) { q.x += (q.tx - q.x) * k; q.y += (q.ty - q.y) * k; }
   gm.sendT -= dt;
-  if (gm.sendT <= 0 && P.alive) {
+  if (gm.sendT <= 0 && mine.alive && !mine.master && !mine.escaped) {
     gm.sendT = 0.1;
     toHost({ t: "pos", x: Math.round(P.x * 10) / 10, y: Math.round(P.y * 10) / 10, dir: Math.round(P.dir * 100) / 100, trail: Math.round(P.trail),
       s: gm.sprinting ? 1 : 0, nx: P.route.filter((w) => w.n >= 0).slice(0, 4).map((w) => w.n) });
@@ -1518,7 +2065,7 @@ function update(dt) {
   if (isHost) hostUpdate(dt); else guestUpdate(dt);
   // compte à rebours avant la 1re vague
   const nw = isHost ? (gm.wave === 0 ? gm.nextWave - gm.t : null) : gm.hostNw;
-  if (gm.wave === 0 && nw != null) {
+  if (gm.wave === 0 && nw != null && nw > 0) {
     const txt = `Les zombies sortent dans ${Math.max(0, Math.ceil(nw))} s`;
     if (txt !== gm.lastBanner) { gm.lastBanner = txt; banner(txt, false, 0); }
   }
@@ -1535,7 +2082,7 @@ function resizeFx() {
 }
 window.addEventListener("resize", resizeFx); resizeFx();
 const COL = {};
-function readColors() { for (const k of ["sodium", "blood", "runner", "night", "ink"]) COL[k] = css("--" + k); }
+function readColors() { for (const k of ["sodium", "blood", "runner", "night", "ink", "ok", "muted"]) COL[k] = css("--" + k); }
 readColors();
 const px = (x, y) => map.latLngToContainerPoint(toLL(x, y));
 function metersToPx(m) {
@@ -1544,6 +2091,24 @@ function metersToPx(m) {
   return Math.abs(p2.x - p1.x);
 }
 let drawPts = null; // tracé en cours (Shift + glisser)
+// Flèche au bord de l'écran vers un repère hors champ
+function edgeArrow(q, color, label, W, Hh) {
+  const mx = 40, my = 100;
+  if (!(q.x < mx || q.y < my || q.x > W - mx || q.y > Hh - my)) return;
+  const cx = W / 2, cy = Hh / 2, dx = q.x - cx, dy = q.y - cy;
+  const t = Math.min((W / 2 - mx) / Math.abs(dx || 1e-6), (Hh / 2 - my) / Math.abs(dy || 1e-6));
+  const ex = cx + dx * t, ey = cy + dy * t, ang = Math.atan2(dy, dx);
+  ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang);
+  ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-8, -10); ctx.lineTo(-8, 10); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  if (label) { ctx.font = "700 12px 'JetBrains Mono', monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#fff"; ctx.fillText(label, ex - Math.cos(ang) * 24, ey - Math.sin(ang) * 24 + 4); }
+}
+function ring(x, y, r, color, w, dash) { ctx.strokeStyle = color; ctx.lineWidth = w || 2; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+function dot(x, y, r, fill) { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+function label(txt, x, y, color) {
+  ctx.font = "600 12px 'Barlow Condensed', 'Arial Narrow', sans-serif"; ctx.textAlign = "center";
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(11,15,20,0.9)"; ctx.strokeText(txt, x, y); ctx.fillStyle = color; ctx.fillText(txt, x, y);
+}
 function render(now) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, fx.width, fx.height);
@@ -1565,46 +2130,132 @@ function render(now) {
   const W = fx.width / DPR, Hh = fx.height / DPR;
   const s = px(G.X[G.spawn], G.Y[G.spawn]);
   const inGame = game && (state === "play" || state === "countdown");
-  const P = inGame ? game.player : null;
-  const spectating = inGame && !P.alive;
+  const P = inGame ? game.player : null, mine = inGame ? meP() : null;
+  const body = inGame && mine.alive && !mine.master && !mine.escaped;           // j'ai un corps sur la carte
+  const seeAll = inGame && (!body || mine.master || game.droneUntil > game.t); // spectateur, maître ou drone
 
-  if (inGame && !spectating) {
-    const pp = px(P.x, P.y); const vis = metersToPx(game.R.vision);
+  // brouillard au-delà de la vision (s'éclaircit vers l'aube)
+  if (inGame && body) {
+    const pp = px(P.x, P.y), dawn = game.mode === "aube" ? Math.min(1, game.t / CFG.aubeDur) : 0;
+    const vis = metersToPx(game.R.vision * (1 + dawn * 0.8));
     ctx.save();
-    ctx.fillStyle = "rgba(5,7,10,0.55)"; ctx.fillRect(0, 0, W, Hh);
+    ctx.fillStyle = `rgba(5,7,10,${0.55 * (1 - dawn * 0.65)})`; ctx.fillRect(0, 0, W, Hh);
     ctx.globalCompositeOperation = "destination-out";
     const grd = ctx.createRadialGradient(pp.x, pp.y, vis * 0.75, pp.x, pp.y, vis);
     grd.addColorStop(0, "rgba(0,0,0,1)"); grd.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(pp.x, pp.y, vis, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    ctx.strokeStyle = "rgba(255,173,66,0.18)"; ctx.lineWidth = 1; ctx.setLineDash([2, 6]);
-    ctx.beginPath(); ctx.arc(pp.x, pp.y, vis, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    ring(pp.x, pp.y, vis, "rgba(255,173,66,0.18)", 1, [2, 6]);
   }
   // point zéro
   const pulse = (now / 1000) % 1.6 / 1.6;
-  ctx.strokeStyle = COL.blood; ctx.lineWidth = 2;
-  ctx.globalAlpha = 1 - pulse; ctx.beginPath(); ctx.arc(s.x, s.y, 8 + pulse * 26, 0, Math.PI * 2); ctx.stroke();
-  ctx.globalAlpha = 1; ctx.fillStyle = COL.blood;
-  ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2); ctx.fill();
-  ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s.x - 11, s.y); ctx.lineTo(s.x + 11, s.y); ctx.moveTo(s.x, s.y - 11); ctx.lineTo(s.x, s.y + 11); ctx.stroke();
-
+  ctx.globalAlpha = 1 - pulse; ring(s.x, s.y, 8 + pulse * 26, COL.blood, 2); ctx.globalAlpha = 1;
+  dot(s.x, s.y, 5, COL.blood);
+  ctx.strokeStyle = COL.blood; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s.x - 11, s.y); ctx.lineTo(s.x + 11, s.y); ctx.moveTo(s.x, s.y - 11); ctx.lineTo(s.x, s.y + 11); ctx.stroke();
   if (!inGame) return;
+
+  // barricades
+  for (const [a, b, left] of game.bars) {
+    const A = px(G.X[a], G.Y[a]), B = px(G.X[b], G.Y[b]);
+    ctx.strokeStyle = "rgba(229,72,77,0.85)"; ctx.lineWidth = 6; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); ctx.setLineDash([]);
+    const mx_ = (A.x + B.x) / 2, my_ = (A.y + B.y) / 2;
+    dot(mx_, my_, 9, "#2a0709"); ring(mx_, my_, 9, COL.blood, 2);
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(mx_ - 4, my_ - 4); ctx.lineTo(mx_ + 4, my_ + 4); ctx.moveTo(mx_ + 4, my_ - 4); ctx.lineTo(mx_ - 4, my_ + 4); ctx.stroke();
+    const lf = isHost ? Math.ceil(left - game.t) : left; if (lf > 0) label(`${lf} s`, mx_, my_ - 14, "#ffb3b5");
+  }
+  // repères du mode
+  const pul = 0.5 + 0.5 * Math.sin(now / 250);
+  for (const m of game.marks) {
+    const q = px(m[1], m[2]);
+    switch (m[0]) {
+      case "evac": {
+        const open = m[3] === 1, col = open ? COL.ok : "rgba(126,224,129,0.6)";
+        ring(q.x, q.y, metersToPx(CFG.goalR) + 4, col, 3, open ? [] : [6, 6]);
+        ring(q.x, q.y, metersToPx(CFG.goalR) + 10 + pul * 10, `rgba(76,195,138,${0.5 - pul * 0.4})`, 2);
+        dot(q.x, q.y, 5, col);
+        label(open ? `ÉVACUATION · ${m[4]} place${m[4] > 1 ? "s" : ""} · ${m[5]} s` : `Évacuation dans ${m[5]} s`, q.x, q.y - 22, open ? "#b9f5c9" : "#d6e2ea");
+        edgeArrow(q, COL.ok, `${m[5]}`, W, Hh);
+        break;
+      }
+      case "crate": {
+        const c = m[3] ? "#5ec8f2" : COL.sodium, sz = 6;
+        ctx.fillStyle = c; ctx.strokeStyle = "#1a1006"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.rect(q.x - sz, q.y - sz, sz * 2, sz * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(q.x - sz, q.y); ctx.lineTo(q.x + sz, q.y); ctx.stroke();
+        break;
+      }
+      case "hill": {
+        const r = metersToPx(m[3]), owner = m[4], o = owner && owner !== "*" ? players.get(owner) : null;
+        const col = o ? o.color : owner === "*" ? "#ff9b9e" : "#d6e2ea";
+        ctx.globalAlpha = 0.16 + 0.08 * pul; dot(q.x, q.y, r, col); ctx.globalAlpha = 1;
+        ring(q.x, q.y, r, col, 3);
+        label(o ? `COLLINE · ${o.name}` : owner === "*" ? "COLLINE · disputée" : "COLLINE · libre", q.x, q.y - r - 8, col);
+        edgeArrow(q, col, "", W, Hh);
+        break;
+      }
+      case "dest": {
+        const T = TEAMS[m[3]], mineT = mine.team === m[3];
+        ring(q.x, q.y, metersToPx(CFG.goalR) + 4, T.color, 3);
+        ctx.fillStyle = T.color; ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x, q.y - 22); ctx.lineTo(q.x + 14, q.y - 17); ctx.lineTo(q.x, q.y - 12); ctx.fill();
+        ctx.strokeStyle = T.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x, q.y - 22); ctx.stroke();
+        label(`Destination ${T.name}`, q.x, q.y - 28, T.color);
+        if (mineT) edgeArrow(q, T.color, "", W, Hh);
+        break;
+      }
+      case "finish": {
+        const r = metersToPx(CFG.goalR) + 4;
+        for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? "#fff" : "#111"; ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.arc(q.x, q.y, r, (i / 8) * Math.PI * 2, ((i + 1) / 8) * Math.PI * 2); ctx.fill(); }
+        ring(q.x, q.y, r, COL.sodium, 2);
+        label("ARRIVÉE", q.x, q.y - r - 8, "#fff");
+        edgeArrow(q, "#fff", "", W, Hh);
+        break;
+      }
+      case "lure": {
+        const r = 10 + ((now / 400) % 1) * 40;
+        ctx.globalAlpha = 1 - ((now / 400) % 1); ring(q.x, q.y, r, "#ffcf6b", 3); ctx.globalAlpha = 1;
+        dot(q.x, q.y, 5, "#ffcf6b"); label(`PÉTARD ${m[3]} s`, q.x, q.y - 16, "#ffcf6b");
+        break;
+      }
+      case "rally": if (m[3] === myId) { ring(q.x, q.y, 14, COL.blood, 2, [4, 4]); label("RALLIEMENT", q.x, q.y - 20, "#ffb3b5"); } break;
+      case "down": {
+        const o = players.get(m[3]); if (!o) break;
+        ring(q.x, q.y, 16 + pul * 4, "rgba(255,155,158,0.8)", 2);
+        if (m[4] > 0) { ctx.strokeStyle = COL.ok; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(q.x, q.y, 20, -Math.PI / 2, -Math.PI / 2 + (m[4] / 100) * Math.PI * 2); ctx.stroke(); }
+        label(`${o.name} à terre · ${m[5]} s`, q.x, q.y + 32, "#ffb3b5");
+        if (m[3] !== myId) edgeArrow(q, "#ff9b9e", "", W, Hh);
+        break;
+      }
+    }
+  }
+  // mon chemin prévu
   const pp = px(P.x, P.y);
-  // chemin prévu
-  if (P.alive && P.route.length) {
+  if (body && P.route.length) {
     ctx.strokeStyle = COL.sodium; ctx.lineWidth = 3; ctx.lineJoin = "round"; ctx.lineCap = "round";
     ctx.setLineDash([7, 7]); ctx.lineDashOffset = -now / 40;
     ctx.beginPath(); ctx.moveTo(pp.x, pp.y);
     for (const w of P.route) { const q = px(w.x, w.y); ctx.lineTo(q.x, q.y); }
     ctx.stroke(); ctx.setLineDash([]);
     const last = P.route[P.route.length - 1]; const q = px(last.x, last.y);
-    ctx.fillStyle = COL.sodium; ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, Math.PI * 2); ctx.fill();
+    dot(q.x, q.y, 5, COL.sodium);
   }
   if (drawPts && drawPts.length > 1) {
     ctx.strokeStyle = "rgba(244,248,255,0.75)"; ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round";
     ctx.beginPath();
     drawPts.forEach((ll, i) => { const q = map.latLngToContainerPoint(ll); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); });
     ctx.stroke();
+  }
+  // visée d'une compétence
+  if (game.targeting && body) {
+    const S = SKILLS[game.targeting];
+    ring(pp.x, pp.y, metersToPx(S.range), "rgba(255,207,107,0.7)", 2, [6, 6]);
+    if (game.mouseLL) {
+      const xy = toXY(game.mouseLL), T = snap(xy.x, xy.y, 120);
+      if (T) {
+        const ok = hyp(T.x, T.y, P.x, P.y) <= S.range, c = ok ? "#ffcf6b" : "#ff9b9e";
+        if (game.targeting === "barricade") { const A = px(G.X[T.ea], G.Y[T.ea]), B = px(G.X[T.eb], G.Y[T.eb]); ctx.strokeStyle = c; ctx.lineWidth = 6; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); ctx.setLineDash([]); }
+        else { const q = px(T.x, T.y); ring(q.x, q.y, 12, c, 3); dot(q.x, q.y, 4, c); }
+      }
+    }
   }
   // anciens nids
   for (const nd of game.nests) {
@@ -1616,73 +2267,80 @@ function render(now) {
   if (game.upcoming && game.wave > 0) {
     const left = Math.max(0, game.upcoming.at - game.t);
     for (const pt of game.upcoming.pts) {
-      const q = px(pt.x, pt.y);
-      const k = Math.min(1, left / CFG.waveWarn);
-      ctx.strokeStyle = COL.blood; ctx.lineWidth = 3; ctx.globalAlpha = 0.9;
-      ctx.beginPath(); ctx.arc(q.x, q.y, 12 + 40 * k, 0, Math.PI * 2); ctx.stroke();
-      ctx.globalAlpha = 1; ctx.fillStyle = COL.blood; ctx.beginPath(); ctx.arc(q.x, q.y, 6, 0, Math.PI * 2); ctx.fill();
+      const q = px(pt.x, pt.y), k = Math.min(1, left / CFG.waveWarn);
+      ctx.globalAlpha = 0.9; ring(q.x, q.y, 12 + 40 * k, COL.blood, 3); ctx.globalAlpha = 1;
+      dot(q.x, q.y, 6, COL.blood);
       ctx.font = "700 14px 'JetBrains Mono', monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#fff";
       ctx.fillText(String(Math.ceil(left)), q.x, q.y - 20 - 40 * k);
-      const mx = 40, my = 100;
-      if (q.x < mx || q.y < my || q.x > W - mx || q.y > Hh - my) {
-        const cx = W / 2, cy = Hh / 2, dx = q.x - cx, dy = q.y - cy;
-        const t = Math.min((W / 2 - mx) / Math.abs(dx || 1e-6), (Hh / 2 - my) / Math.abs(dy || 1e-6));
-        const ex = cx + dx * t, ey = cy + dy * t, ang = Math.atan2(dy, dx);
-        ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang);
-        ctx.fillStyle = COL.blood; ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-8, -10); ctx.lineTo(-8, 10); ctx.closePath(); ctx.fill();
-        ctx.restore();
-        ctx.fillStyle = "#fff"; ctx.fillText(String(Math.ceil(left)), ex - Math.cos(ang) * 22, ey - Math.sin(ang) * 22 + 5);
-      }
+      edgeArrow(q, COL.blood, String(Math.ceil(left)), W, Hh);
     }
   }
-  // zombies : dans mon champ de vision (tous si je suis éliminé)
-  const vm = game.R.vision; const zr = Math.max(4, Math.min(8, metersToPx(4)));
+  // zombies : dans mon champ de vision (tous si je suis spectateur, maître ou si mon drone vole)
+  const vm = game.R.vision * (game.mode === "aube" ? 1 + Math.min(1, game.t / CFG.aubeDur) * 0.8 : 1);
+  const zr = Math.max(4, Math.min(8, metersToPx(4)));
   for (const z of game.zombies) {
-    const d = hyp(z.x, z.y, P.x, P.y); if (!spectating && d > vm) continue;
-    const a = spectating ? 1 : Math.min(1, (vm - d) / (vm * 0.2));
+    const d = hyp(z.x, z.y, P.x, P.y); if (!seeAll && d > vm) continue;
+    const a = seeAll ? 1 : Math.min(1, (vm - d) / (vm * 0.2));
     const wob = Math.sin(now / 140 + z.wob) * 0.8;
     const q = px(z.x + z.ox + wob, z.y + z.oy);
     ctx.globalAlpha = a;
-    ctx.fillStyle = "rgba(229,72,77,0.25)"; ctx.beginPath(); ctx.arc(q.x, q.y, zr * 2, 0, Math.PI * 2); ctx.fill();
+    dot(q.x, q.y, zr * 2, "rgba(229,72,77,0.25)");
     ctx.fillStyle = COL.blood; ctx.strokeStyle = "#2a0709"; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(q.x, q.y, zr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   }
   ctx.globalAlpha = 1;
   // autres joueurs
-  ctx.font = "600 12px 'Barlow Condensed', 'Arial Narrow', sans-serif"; ctx.textAlign = "center";
   for (const q of players.values()) {
-    if (q.id === myId) continue;
+    if (q.id === myId || q.master || q.escaped) continue;
+    // le maître de la horde ne voit que les survivants repérés par ses zombies
+    if (mine.master && !q.zombie && !game.zombies.some((z) => hyp(z.x, z.y, q.x, q.y) < CFG.senseR)) continue;
     const o = px(q.x, q.y);
-    if (q.alive) {
-      ctx.fillStyle = q.color; ctx.strokeStyle = "#0b0f14"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(o.x, o.y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    } else {
+    if (!q.alive) {
       ctx.strokeStyle = "rgba(138,153,168,0.8)"; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(o.x - 5, o.y - 5); ctx.lineTo(o.x + 5, o.y + 5); ctx.moveTo(o.x + 5, o.y - 5); ctx.lineTo(o.x - 5, o.y + 5); ctx.stroke();
+      label(q.name, o.x, o.y - 11, "rgba(138,153,168,0.9)"); continue;
     }
-    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(11,15,20,0.9)"; ctx.strokeText(q.name, o.x, o.y - 11);
-    ctx.fillStyle = q.alive ? q.color : "rgba(138,153,168,0.9)"; ctx.fillText(q.name, o.x, o.y - 11);
+    ctx.globalAlpha = q.hidden ? 0.35 : 1;
+    if (q.team != null) ring(o.x, o.y, 9, TEAMS[q.team].color, 3);
+    if (q.zombie) { dot(o.x, o.y, 7, COL.blood); ring(o.x, o.y, 7, "#2a0709", 2); }
+    else if (q.down) { dot(o.x, o.y, 6, "rgba(138,153,168,0.9)"); }
+    else { ctx.fillStyle = q.color; ctx.strokeStyle = "#0b0f14"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(o.x, o.y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    if (q.vip) { ctx.fillStyle = "#ffd75e"; ctx.beginPath(); ctx.moveTo(o.x, o.y - 22); ctx.lineTo(o.x + 5, o.y - 16); ctx.lineTo(o.x, o.y - 10); ctx.lineTo(o.x - 5, o.y - 16); ctx.fill(); }
+    label(q.zombie ? `${q.name} (infecté)` : q.name, o.x, o.y - (q.vip ? 26 : 11), q.zombie ? "#ff9b9e" : q.color);
+    ctx.globalAlpha = 1;
   }
   // moi
-  if (!P.alive) {
-    ctx.strokeStyle = COL.blood; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(pp.x - 7, pp.y - 7); ctx.lineTo(pp.x + 7, pp.y + 7); ctx.moveTo(pp.x + 7, pp.y - 7); ctx.lineTo(pp.x - 7, pp.y + 7); ctx.stroke();
+  if (!body) {
+    if (!mine.alive && !mine.master) {
+      ctx.strokeStyle = COL.blood; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(pp.x - 7, pp.y - 7); ctx.lineTo(pp.x + 7, pp.y + 7); ctx.moveTo(pp.x + 7, pp.y - 7); ctx.lineTo(pp.x - 7, pp.y + 7); ctx.stroke();
+    }
     return;
   }
-  const r = 7; const myColor = (me() && me().color) || COL.sodium;
-  if (game.sprinting) { ctx.fillStyle = "rgba(255,173,66,0.3)"; ctx.beginPath(); ctx.arc(pp.x, pp.y, r * 2.4, 0, Math.PI * 2); ctx.fill(); }
-  ctx.fillStyle = COL.runner; ctx.strokeStyle = myColor; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.arc(pp.x, pp.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  const dx = Math.cos(P.dir), dy = -Math.sin(P.dir);
-  ctx.fillStyle = myColor; ctx.beginPath();
-  ctx.moveTo(pp.x + dx * (r + 9), pp.y + dy * (r + 9));
-  ctx.lineTo(pp.x + dx * (r + 2) - dy * 5, pp.y + dy * (r + 2) + dx * 5);
-  ctx.lineTo(pp.x + dx * (r + 2) + dy * 5, pp.y + dy * (r + 2) - dx * 5);
-  ctx.closePath(); ctx.fill();
+  const r = 7, myColor = mine.color || COL.sodium;
+  const hiddenMe = game.planqueUntil > game.t;
+  ctx.globalAlpha = hiddenMe ? 0.45 : 1;
+  if (mine.team != null) ring(pp.x, pp.y, 11, TEAMS[mine.team].color, 3);
+  if (game.sprinting) dot(pp.x, pp.y, r * 2.4, "rgba(255,173,66,0.3)");
+  if (mine.zombie) { dot(pp.x, pp.y, r + 1, COL.blood); ring(pp.x, pp.y, r + 1, "#2a0709", 2); }
+  else if (mine.down) { dot(pp.x, pp.y, r, "rgba(138,153,168,0.9)"); }
+  else { ctx.fillStyle = COL.runner; ctx.strokeStyle = myColor; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(pp.x, pp.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+  if (mine.vip) { ctx.fillStyle = "#ffd75e"; ctx.beginPath(); ctx.moveTo(pp.x, pp.y - 24); ctx.lineTo(pp.x + 6, pp.y - 17); ctx.lineTo(pp.x, pp.y - 10); ctx.lineTo(pp.x - 6, pp.y - 17); ctx.fill(); }
+  if (!mine.down) {
+    const dx = Math.cos(P.dir), dy = -Math.sin(P.dir);
+    ctx.fillStyle = mine.zombie ? COL.blood : myColor; ctx.beginPath();
+    ctx.moveTo(pp.x + dx * (r + 9), pp.y + dy * (r + 9));
+    ctx.lineTo(pp.x + dx * (r + 2) - dy * 5, pp.y + dy * (r + 2) + dx * 5);
+    ctx.lineTo(pp.x + dx * (r + 2) + dy * 5, pp.y + dy * (r + 2) - dx * 5);
+    ctx.closePath(); ctx.fill();
+  }
+  if (hiddenMe) label(`PLANQUÉ · ${Math.ceil(game.planqueUntil - game.t)} s`, pp.x, pp.y - 16, "#d6e2ea");
+  ctx.globalAlpha = 1;
 }
 
 /* ---------------- HUD ---------------- */
 const fmtTime = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s < 10 ? "0" : ""}${s.toFixed(1)}`; };
+const fmtClock = (t) => { t = Math.max(0, Math.ceil(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
 const fmtDist = (m) => m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2).replace(".", ",")} km`;
 let bannerTimer = 0;
 function banner(text, danger, ms) {
@@ -1690,39 +2348,87 @@ function banner(text, danger, ms) {
   clearTimeout(bannerTimer); if (ms) bannerTimer = setTimeout(() => { b.hidden = true; }, ms);
 }
 function flash() { const f = $("flash"); f.style.opacity = 1; setTimeout(() => (f.style.opacity = 0), 260); }
+function findMark(kind, pred) { return game.marks.find((m) => m[0] === kind && (!pred || pred(m))); }
+function objectiveText() {
+  const gm = game, q = meP(), h = gm.hud, P = gm.player;
+  const dist = (m) => (m ? where({ x: m[1], y: m[2] }) : "");
+  let t = h ? h.txt + (h.left != null ? ` ${fmtClock(h.left)}` : "") + (h.extra ? ` · ${h.extra}` : "") : "";
+  if (gm.mode === "patient" && gm.secret && !q.zombie) t = `Tu es le patient zéro · transformation dans ${fmtClock(CFG.patientTurn - gm.t)}`;
+  if (gm.mode === "patient" && q.zombie) t = "Infecté : attrape les humains" + (h && h.left != null ? ` · ${fmtClock(h.left)}` : "");
+  if (gm.mode === "extraction") { const e = findMark("evac"); if (e && !q.escaped) t += ` · ${dist(e)}`; if (q.escaped) t = "Évacué : tu es sauvé"; }
+  if (gm.mode === "colline") { const hl = findMark("hill"); if (hl) t += hl[4] === myId ? " · tu tiens la colline !" : ` · colline ${dist(hl)}`; }
+  if (gm.mode === "escorte" && q.team != null) { const d = findMark("dest", (m) => m[3] === q.team); t = `${q.vip ? "Tu es le VIP : rejoins" : "Escorte ton VIP jusqu'à"} la destination ${TEAMS[q.team].name}${d ? " · " + dist(d) : ""}`; }
+  if (gm.mode === "horde" && q.master) t = "Maître de la horde : clic pour rallier, A pour hurler" + (h && h.left != null ? ` · ${fmtClock(h.left)}` : "");
+  if (gm.mode === "course") { const f = findMark("finish"); t = q.escaped ? "Arrivé ! Tu observes les autres" : `Rejoins l'arrivée${f ? " · " + dist(f) : ""}`; }
+  if (gm.mode === "aube" && q.down) t = "À terre : un coéquipier doit rester 3 s près de toi";
+  return t;
+}
 function updateHud() {
-  const gm = game, P = gm.player;
-  $("hTime").textContent = fmtTime(P.alive ? gm.t : (me() ? me().time : gm.t));
+  const gm = game, P = gm.player, q = meP();
+  const myTime = q.alive && !q.escaped && !q.zombie ? gm.t : (q.time || gm.t);
+  $("hTime").textContent = fmtTime(myTime);
   $("hWave").textContent = gm.wave ? String(gm.wave) : "–";
   $("hZomb").textContent = String(gm.zombies.length);
   $("hDist").textContent = fmtDist(P.trail);
   $("hAliveRow").hidden = !net; $("hAliveK").hidden = !net;
-  if (net) { const all = [...players.values()]; $("hAlive").textContent = `${all.filter((q) => q.alive).length} / ${all.length}`; }
+  if (net) { const all = [...players.values()].filter((o) => !o.master); $("hAlive").textContent = `${all.filter(isPrey).length} / ${all.length}`; }
+  const scoreOn = !!gm.M.score; $("hScoreK").hidden = !scoreOn; $("hScore").hidden = !scoreOn; if (scoreOn) $("hScore").textContent = `${q.score || 0} pts`;
+  // étiquette de rôle
+  let tag = q.master ? "Maître de la horde" : q.zombie ? (q.patient || gm.secret ? "Patient zéro" : "Infecté") : gm.R.name;
+  if (q.team != null) tag += ` · équipe ${TEAMS[q.team].name}`;
+  if (q.vip) tag += " · VIP";
+  $("hRole").textContent = tag;
+  $("hMode").textContent = gm.M.name + (gm.M.proto ? " · prototype" : "");
+  const helpKey = q.master ? "m" : q.zombie ? "z" : "p";
+  if (gm.helpKey !== helpKey) {
+    gm.helpKey = helpKey;
+    $("helpBox").innerHTML = q.master
+      ? "<span><kbd>Clic</kbd> rallier ta horde ici</span><span><kbd>A</kbd> cri : la horde accélère</span><span><kbd>Glisser</kbd> déplacer la carte</span>"
+      : q.zombie ? "<span><kbd>Clic</kbd> courir vers un point</span><span>Tu es plus rapide que les humains</span>"
+      : "<span><kbd>Clic</kbd> courir vers un point</span><span><kbd>Shift</kbd> + glisser : tracer ton chemin</span><span><kbd>Espace</kbd> sprint (bruyant)</span><span><kbd>A</kbd> compétence</span>";
+  }
+  const ob = objectiveText(); $("hObj").textContent = ob; $("hObj").hidden = !ob;
+  // endurance
   const ratio = P.stamina / gm.R.stamina;
   const fill = $("hStam"); fill.style.transform = `scaleX(${ratio})`; fill.classList.toggle("low", ratio < 0.25);
   const lbl = $("hStamLbl"); lbl.classList.toggle("on", !!gm.sprinting);
-  lbl.textContent = !P.alive ? "Éliminé" : gm.sprinting ? "Sprint · tu fais du bruit" : (ratio < 0.02 ? "À bout de souffle" : "Endurance · Espace pour sprinter");
-  const det = $("hDetect"), h = gm.huntedMe || 0;
-  det.hidden = !P.alive || !gm.zombies.length;
-  if (h !== gm.lastHunted) {
-    det.textContent = h ? `Repéré · ${h} zombie${h > 1 ? "s" : ""} te traque${h > 1 ? "nt" : ""}` : "Discret · ils suivent ta piste";
-    det.classList.toggle("on", h > 0);
-    if (h > 0 && !(gm.lastHunted > 0)) { det.classList.remove("pop"); void det.offsetWidth; det.classList.add("pop"); }
-    gm.lastHunted = h;
+  $("stamBox").hidden = !!(q.master || q.zombie || !q.alive || q.escaped);
+  lbl.textContent = q.down ? "À terre" : gm.rushUntil > gm.t ? "Rush · sprint sans fatigue" : gm.sprinting ? "Sprint · tu fais du bruit" : gm.sprintLock ? "Souffle court : relâche Espace" : (ratio < 0.02 ? "À bout de souffle" : "Endurance · Espace pour sprinter");
+  // repéré / discret
+  const det = $("hDetect"), hn = gm.huntedMe || 0;
+  det.hidden = !isPrey(q) || !gm.zombies.length;
+  if (hn !== gm.lastHunted) {
+    det.textContent = hn ? `Repéré · ${hn} zombie${hn > 1 ? "s" : ""} te traque${hn > 1 ? "nt" : ""}` : "Discret · ils suivent ta piste";
+    det.classList.toggle("on", hn > 0);
+    if (hn > 0 && !(gm.lastHunted > 0)) { det.classList.remove("pop"); void det.offsetWidth; det.classList.add("pop"); }
+    gm.lastHunted = hn;
+  }
+  // compétence
+  const sk = mySkill(), btn = $("skillBtn");
+  btn.hidden = !sk;
+  if (sk) {
+    const S = SKILLS[sk], cd = Math.max(0, gm.skillReadyAt - gm.t), active = (sk === "rush" && gm.rushUntil > gm.t) || (sk === "drone" && gm.droneUntil > gm.t) || (sk === "planque" && gm.planqueUntil > gm.t);
+    $("skName").textContent = S.name;
+    $("skState").textContent = gm.targeting ? "Vise…" : active ? "Actif" : cd > 0 ? `${Math.ceil(cd)} s` : "Prêt";
+    btn.classList.toggle("ready", cd <= 0 && !gm.targeting); btn.classList.toggle("aiming", !!gm.targeting); btn.classList.toggle("active", active);
+    btn.style.setProperty("--cd", String(cd > 0 ? cd / S.cd : 0));
+    btn.title = S.desc;
   }
   let near = Infinity; for (const z of gm.zombies) near = Math.min(near, hyp(z.x, z.y, P.x, P.y));
   const th = $("threat");
-  if (P.alive && near <= gm.R.vision) { th.hidden = false; th.textContent = `Zombie à ${Math.round(near)} m`; } else th.hidden = true;
+  if (isPrey(q) && near <= gm.R.vision) { th.hidden = false; th.textContent = `Zombie à ${Math.round(near)} m`; } else th.hidden = true;
 }
 
 /* ---------------- Boucle ---------------- */
 let last = performance.now();
+const TIME_SCALE = Math.min(10, Math.max(0.1, +new URLSearchParams(location.search).get("vitesse") || 1)); // ?vitesse=4 : accélère le temps (tests)
 function frame(now) {
   let dt = (now - last) / 1000; last = now;
   if (dt > 0.25) dt = 0.016;
+  dt *= TIME_SCALE;
   if (state === "play" && game) {
     const steps = Math.ceil(dt / 0.02); for (let i = 0; i < steps && state === "play"; i++) update(dt / steps);
-    if (state === "play") { if (game.player.alive) followCam(); updateHud(); }
+    if (state === "play") { const q = meP(); if (q.alive && !q.master && !q.escaped) followCam(); updateHud(); }
   }
   render(now);
   requestAnimationFrame(frame);
@@ -1744,18 +2450,24 @@ setInterval(() => {
 /* ---------------- Entrées ---------------- */
 let suppressClick = 0;
 map.on("click", (e) => {
-  if (state === "lobby" && isHost) { setPick(e.latlng); return; }
-  if (state !== "play" || !game.player.alive) return;
+  if (state === "lobby" && isHost) { lobbyMapClick(e.latlng); return; }
+  if (state !== "play" || !game) return;
   if (performance.now() < suppressClick || (e.originalEvent && e.originalEvent.shiftKey)) return;
+  if (game.targeting) { fireTarget(e.latlng); return; }
+  const q = meP();
+  if (q.master) { const xy = toXY(e.latlng), T = snap(xy.x, xy.y, 300); if (T) { const n = hyp(T.x, T.y, G.X[T.ea], G.Y[T.ea]) < hyp(T.x, T.y, G.X[T.eb], G.Y[T.eb]) ? T.ea : T.eb; if (isHost) hostRally(myId, { node: n }); else toHost({ t: "rally", node: n }); banner("Ta horde se rassemble ici", false, 1200); } return; }
+  if (!canMove()) return;
   goTo(e.latlng);
 });
+map.on("mousemove", (e) => { if (game) game.mouseLL = e.latlng; });
+map.on("contextmenu", () => { if (game && game.targeting) { game.targeting = null; mapEl.classList.remove("aiming"); } });
 function goTo(ll) {
   const p = toXY(ll); const T = snap(p.x, p.y, 600); if (!T) return;
-  const r = route(game.player, T); if (r) game.player.route = r;
+  const r = route(game.player, T); if (r) game.player.route = r; else banner("Impossible d'y aller par là", false, 1500);
 }
 const mapEl = map.getContainer();
 mapEl.addEventListener("mousedown", (e) => {
-  if (state !== "play" || !game.player.alive || !e.shiftKey || e.button !== 0) return;
+  if (state !== "play" || !game || !canMove() || game.targeting || !e.shiftKey || e.button !== 0) return;
   e.preventDefault(); e.stopPropagation();
   drawPts = [map.mouseEventToLatLng(e)];
 }, true);
@@ -1768,7 +2480,7 @@ window.addEventListener("mousemove", (e) => {
 window.addEventListener("mouseup", () => {
   if (!drawPts) return;
   const pts = drawPts; drawPts = null; suppressClick = performance.now() + 250;
-  if (state !== "play" || !game.player.alive) return;
+  if (state !== "play" || !canMove()) return;
   if (pts.length < 2) { goTo(pts[0]); return; }
   followDrawn(pts);
 });
@@ -1795,9 +2507,11 @@ function followDrawn(pts) {
   if (all.length) game.player.route = all;
 }
 window.addEventListener("keydown", (e) => {
-  if (e.target && e.target.tagName === "INPUT") return;
+  if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT")) return;
   if (e.key === "Shift" && state === "play") mapEl.classList.add("drawing");
   if (e.code === "Space" && state === "play") { e.preventDefault(); game.sprint = true; }
+  if (state === "play" && !e.repeat && (e.code === "KeyQ" || e.key === "a" || e.key === "A")) { e.preventDefault(); useSkill(); }
+  if (e.key === "Escape" && game && game.targeting) { game.targeting = null; mapEl.classList.remove("aiming"); }
 });
 window.addEventListener("keyup", (e) => {
   if (e.key === "Shift") mapEl.classList.remove("drawing");
@@ -1807,30 +2521,90 @@ window.addEventListener("blur", () => { if (game) game.sprint = false; drawPts =
 const sb = $("sprintBtn");
 sb.addEventListener("pointerdown", (e) => { e.preventDefault(); if (game) game.sprint = true; });
 ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => sb.addEventListener(ev, () => { if (game) game.sprint = false; }));
+$("skillBtn").addEventListener("click", (e) => { e.stopPropagation(); useSkill(); });
 
-/* ---------------- Choix du lieu (hôte) ---------------- */
+/* ---------------- Choix du mode et du lieu (hôte) ---------------- */
 function showStep(id) {
   for (const s of ["stepKey", "stepMenu", "stepLobby", "stepLoad", "stepRole", "stepOver"]) $(s).hidden = s !== id;
   $("tagline").hidden = id === "stepOver";
   renderPlayers();
 }
 function radius() { return +document.querySelector('input[name="radius"]:checked').value; }
+let finishPick = null, finishMarker = null;
+const pinMode = () => (document.querySelector('input[name="pin"]:checked') || {}).value || "start";
+function lobbyMapClick(ll) {
+  if (gameMode === "defi") { zstatus("Le Défi du jour se joue au lieu imposé.", "err"); return; }
+  if (gameMode === "course" && pinMode() === "finish") { setFinish(ll); return; }
+  setPick(ll);
+  if (gameMode === "course" && !finishPick) { const f = document.querySelector('input[name="pin"][value="finish"]'); if (f) f.checked = true; }
+}
 function setPick(ll) {
   picked = { lat: ll.lat, lon: ll.lng };
   if (!pickMarker) pickMarker = L.circleMarker(ll, { radius: 7, color: css("--blood"), weight: 2, fillColor: css("--blood"), fillOpacity: 0.5 }).addTo(map);
   else pickMarker.setLatLng(ll);
-  drawZone();
-  $("pickInfo").innerHTML = `Point zéro : <b>${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}</b>`;
-  $("loadBtn").disabled = false;
   if (map.getZoom() < 14) map.setView(ll, 15);
   zoneChanged();
 }
-function drawZone() {
-  if (!picked) return;
-  if (zoneCircle) zoneCircle.remove();
-  zoneCircle = L.circle([picked.lat, picked.lon], { radius: radius(), color: css("--sodium"), weight: 1.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
+function setFinish(ll) {
+  finishPick = { lat: ll.lat, lon: ll.lng };
+  if (!finishMarker) finishMarker = L.circleMarker(ll, { radius: 8, color: "#ffffff", weight: 3, fillColor: "#111", fillOpacity: 0.9 }).addTo(map);
+  else finishMarker.setLatLng(ll);
+  zoneChanged();
 }
-document.querySelectorAll('input[name="radius"]').forEach((r) => r.addEventListener("change", () => { drawZone(); zoneChanged(); }));
+function currentZone() {
+  const paths = $("withPaths").checked;
+  if (gameMode === "defi") { const [name, lat, lon] = dailySpot(); return { lat, lon, r: 1000, paths, fake: false, name }; }
+  if (!picked) return null;
+  if (gameMode === "course") {
+    if (!finishPick) return null;
+    const ky = 110574, kx = 111320 * Math.cos(picked.lat * Math.PI / 180);
+    const d = Math.hypot((finishPick.lon - picked.lon) * kx, (finishPick.lat - picked.lat) * ky);
+    if (d < 300 || d > 4000) return null;
+    return { lat: (picked.lat + finishPick.lat) / 2, lon: (picked.lon + finishPick.lon) / 2, r: Math.round(Math.min(2500, Math.max(800, d / 2 + 400))), paths, fake: false, start: { ...picked }, finish: { ...finishPick }, dist: Math.round(d) };
+  }
+  return { lat: picked.lat, lon: picked.lon, r: radius(), paths, fake: false };
+}
+function zoneChanged() {
+  if (!isHost) return;
+  zone = currentZone();
+  drawZone(); updateZoneInfo(); pushLobby(); schedulePrefetch();
+}
+function drawZone() {
+  if (zoneCircle) { zoneCircle.remove(); zoneCircle = null; }
+  const z = zone || currentZone(); if (!z) return;
+  zoneCircle = L.circle([z.lat, z.lon], { radius: z.r, color: css("--sodium"), weight: 1.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
+}
+function updateZoneInfo() {
+  const z = zone, M = MODES[gameMode];
+  let t = "";
+  if (gameMode === "defi") t = `Lieu du jour : <b>${esc(z.name)}</b> (rayon 1 km)`;
+  else if (gameMode === "course") {
+    if (!picked) t = "Clique sur la carte pour placer le <b>départ</b>.";
+    else if (!finishPick) t = "Clique maintenant pour placer l'<b>arrivée</b> (300 m à 4 km du départ).";
+    else if (!z) t = "L'arrivée doit être entre 300 m et 4 km du départ.";
+    else t = `Trajet de <b>${fmtDist(z.dist)}</b> à vol d'oiseau`;
+  } else t = picked ? `Point zéro : <b>${picked.lat.toFixed(5)}, ${picked.lon.toFixed(5)}</b>` : "Clique sur la carte pour placer le point zéro.";
+  $("pickInfo").innerHTML = t;
+  $("loadBtn").disabled = !z;
+  $("modeDesc").textContent = M.desc;
+}
+function setMode(k) {
+  if (!MODES[k]) k = "survie";
+  gameMode = k;
+  if ($("modeSel").value !== k) $("modeSel").value = k;
+  const course = k === "course", defi = k === "defi";
+  $("pinRow").hidden = !course; $("radiusBox").hidden = course || defi; $("searchForm").hidden = defi;
+  if (finishMarker && !course) { finishMarker.remove(); finishMarker = null; finishPick = null; }
+  if (defi) { const [, lat, lon] = dailySpot(); if (pickMarker) { pickMarker.remove(); pickMarker = null; } picked = null; map.setView([lat, lon], 15); }
+  zstatus("");
+  zoneChanged();
+}
+function fillModeSelect() {
+  $("modeSel").innerHTML = Object.entries(MODES).map(([k, M]) => `<option value="${k}">${M.name}${M.proto ? " · prototype" : ""}${M.min > 1 ? ` (${M.min} joueurs min.)` : ""}</option>`).join("");
+}
+fillModeSelect();
+$("modeSel").addEventListener("change", (e) => setMode(e.target.value));
+document.querySelectorAll('input[name="radius"]').forEach((r) => r.addEventListener("change", zoneChanged));
 $("withPaths").addEventListener("change", zoneChanged);
 $("searchForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -1840,12 +2614,16 @@ $("searchForm").addEventListener("submit", async (e) => {
     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, { headers: { "Accept-Language": "fr" } });
     const j = await res.json();
     if (!j.length) { zstatus("Aucun lieu trouvé pour cette recherche.", "err"); return; }
-    const ll = L.latLng(+j[0].lat, +j[0].lon); map.setView(ll, 16); setPick(ll);
+    const ll = L.latLng(+j[0].lat, +j[0].lon); map.setView(ll, 16); lobbyMapClick(ll);
     zstatus(j[0].display_name.split(",").slice(0, 3).join(","));
   } catch { zstatus("La recherche ne répond pas. Clique directement sur la carte.", "err"); }
 });
 function zstatus(t, cls) { const s = $("zoneStatus"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); }
-
+// Point du graphe le plus proche d'une position (départ et arrivée de la course)
+function nodeNear(ll) {
+  const T = snap((ll.lon - G.lon0) * G.kx, (ll.lat - G.lat0) * G.ky, 2000); if (!T) return G.spawn;
+  return hyp(T.x, T.y, G.X[T.ea], G.Y[T.ea]) < hyp(T.x, T.y, G.X[T.eb], G.Y[T.eb]) ? T.ea : T.eb;
+}
 /* ---------------- Chargement des rues par secteurs ---------------- */
 // Grille fixe d'environ 1 km de côté, calée sur les coordonnées (et non sur le point choisi) :
 // un même secteur garde la même clé d'une partie à l'autre, ce qui permet de le garder en cache.
@@ -2133,17 +2911,22 @@ function fakeCity(lat0, lon0, R) {
 }
 
 /* ---------------- Départ, fin ---------------- */
-function startCountdown() {
+function startCountdown(setup) {
   if (!G) return;
-  newGame();
-  $("panel").hidden = true; $("hud").hidden = false; $("hRole").textContent = game.R.name;
-  $("banner").hidden = true; $("threat").hidden = true;
+  newGame(setup || { mode: gameMode, seed: 1, teams: {}, vip: [], masters: [], dests: [] });
+  const q = meP();
+  $("panel").hidden = true; $("hud").hidden = false;
+  $("banner").hidden = true; $("threat").hidden = true; $("boardBox").hidden = true;
   if (zoneCircle) zoneCircle.remove();
   zoneCircle = L.circle([zone.lat, zone.lon], { radius: zone.r, color: css("--blood"), weight: 1.5, opacity: 0.5, dashArray: "4 8", fill: false, interactive: false }).addTo(map);
-  map.dragging.disable(); map.doubleClickZoom.disable();
-  map.setView(toLL(game.player.x, game.player.y), CFG.playZoom, { animate: false });
+  if (q.master) { map.dragging.enable(); map.doubleClickZoom.enable(); map.setView(toLL(G.X[G.spawn], G.Y[G.spawn]), 15, { animate: false }); }
+  else { map.dragging.disable(); map.doubleClickZoom.disable(); map.setView(toLL(game.player.x, game.player.y), CFG.playZoom, { animate: false }); }
   updateHud(); renderPlayers();
   state = "countdown";
+  const intro = q.master ? "Tu diriges la horde : clique pour la rallier, A pour hurler."
+    : q.vip ? `Tu es le VIP de l'équipe ${TEAMS[q.team].name} : rejoins ta destination.`
+    : q.team != null ? `Équipe ${TEAMS[q.team].name} : protège ton VIP.` : "";
+  if (intro) banner(intro, false, 5000);
   const cd = $("countdown"); const seq = ["3", "2", "1", "GO"]; let i = 0;
   const tick = () => {
     if (state !== "countdown") return;
@@ -2153,36 +2936,71 @@ function startCountdown() {
   };
   tick();
 }
-function showResults(results, wave, winnerId) {
-  state = "over"; if (game) { game.sprint = false; } drawPts = null;
+const WIN_TITLES = { survie: "Victoire", extraction: "Évacué", patient: "Victoire", tresor: "Victoire", colline: "Victoire", escorte: "Victoire", horde: "Victoire", aube: "L'aube est là", course: "Victoire", defi: "Victoire" };
+function showResults(m) {
+  state = "over"; if (game) { game.sprint = false; game.targeting = null; } drawPts = null;
+  mapEl.classList.remove("aiming");
   map.dragging.enable(); map.doubleClickZoom.enable();
   $("banner").hidden = true; $("threat").hidden = true; $("hud").hidden = true; $("countdown").innerHTML = "";
-  const mine = results.find((r) => r.id === myId) || results[0];
-  const winner = winnerId ? results.find((r) => r.id === winnerId) : null;
-  const won = !!winner && winner.id === myId;
-  $("overTitle").textContent = won ? "Victoire" : "Rattrapé";
+  const rows = m.rows || [], M = MODES[m.mode] || MODES.survie;
+  const mine = rows.find((r) => r.id === myId) || rows[0] || { time: 0, trail: 0, value: "", score: 0 };
+  const won = !!mine.win, winners = rows.filter((r) => r.win);
+  let title = won ? WIN_TITLES[m.mode] || "Victoire" : "Défaite", sub = "";
+  if (m.mode === "survie") { if (!won) title = "Rattrapé"; sub = winners[0] ? (won ? `Tu es le dernier survivant, après ${fmtTime(mine.time)} de fuite.` : `<span class="pdot" style="background:${winners[0].color}"></span> <b>${esc(winners[0].name)}</b> remporte la partie.`) : ""; }
+  if (m.mode === "defi") { title = "Défi terminé"; sub = `Tu as tenu <b>${fmtTime(mine.time)}</b> au défi du jour.`; }
+  if (m.mode === "extraction") { if (!won) title = "Abandonné"; sub = winners.length ? `Évacués : ${winners.map((w) => `<b>${esc(w.name)}</b>`).join(", ")}.` : "Personne n'a pu être évacué."; }
+  if (m.mode === "patient") { const pz = rows.find((r) => r.note.startsWith("Patient")); sub = winners.length && pz && winners[0].id === pz.id ? `L'épidémie l'emporte. Le patient zéro était <b>${esc(pz.name)}</b>.` : `Les humains ont tenu.${pz ? ` Le patient zéro était <b>${esc(pz.name)}</b>.` : ""}`; if (!won) title = "Infecté"; }
+  if (M.score) sub = winners.length ? `${winners.map((w) => `<b>${esc(w.name)}</b>`).join(", ")} gagne avec ${winners[0].value}.` : "Personne n'a marqué de points.";
+  if (m.mode === "escorte") sub = winners.length ? `L'équipe ${winners[0].note.split(" · ")[0].replace("Équipe ", "")} l'emporte.` : "Aucun VIP n'est arrivé.";
+  if (m.mode === "horde") sub = winners.length && rows.find((r) => r.win && r.note === "Maître de la horde") ? "La horde a eu tout le monde." : "Les survivants ont tenu.";
+  if (m.mode === "aube") { if (!won) title = "La nuit l'emporte"; sub = won ? "Vous avez tenu jusqu'au lever du jour." : "Tout le monde est tombé avant l'aube."; }
+  if (m.mode === "course") { if (!won) title = mine.note === "Arrivé" ? "Arrivé" : "Rattrapé"; sub = winners[0] ? `Meilleur temps : <b>${esc(winners[0].name)}</b> en ${winners[0].value}.` : "Personne n'a atteint l'arrivée."; }
+  $("overTitle").textContent = title;
   $("overTitle").classList.toggle("win", won);
   $("stepOver").classList.toggle("victory", won);
-  $("overSub").hidden = !winner;
-  if (winner) $("overSub").innerHTML = won
-    ? `Tu es le dernier survivant, après ${fmtTime(winner.time)} de fuite.`
-    : `<span class="pdot" style="background:${winner.color}"></span> <b>${winner.name}</b> remporte la partie.`;
-  $("rTime").textContent = fmtTime(mine.time); $("rDist").textContent = fmtDist(mine.trail);
-  $("rWave").textContent = String(wave); $("rZomb").textContent = String(game ? game.zombies.length : 0);
-  const ol = $("ranking"); ol.innerHTML = ""; ol.hidden = !net;
-  results.forEach((r, i) => {
-    const li = document.createElement("li"); li.className = (r.id === myId ? "me " : "") + (r.id === winnerId ? "winner" : "");
-    li.innerHTML = `<span class="rk">${i + 1}</span><span class="pdot" style="background:${r.color}"></span><span class="pname">${r.name}${r.id === winnerId ? ' <span class="tag">Vainqueur</span>' : ""}</span><span class="rrole">${ROLES[r.role] ? ROLES[r.role].name : ""}</span><span class="rt">${fmtTime(r.time)}</span>`;
+  $("overSub").innerHTML = sub; $("overSub").hidden = !sub;
+  $("overMode").innerHTML = modeBadge(m.mode);
+  $("rTimeK").textContent = M.score ? "Ton score" : m.mode === "course" ? "Ton temps" : "Ta survie";
+  $("rTime").textContent = M.score ? `${mine.score} pts` : m.mode === "course" ? mine.value : fmtTime(mine.time);
+  $("rDist").textContent = fmtDist(mine.trail);
+  $("rWave").textContent = String(m.wave); $("rZomb").textContent = String(m.zombies != null ? m.zombies : game ? game.zombies.length : 0);
+  const ol = $("ranking"); ol.innerHTML = ""; ol.hidden = rows.length < 2;
+  rows.forEach((r, i) => {
+    const li = document.createElement("li"); li.className = (r.id === myId ? "me " : "") + (r.win ? "winner" : "");
+    li.innerHTML = `<span class="rk">${i + 1}</span><span class="pdot" style="background:${r.color}"></span><span class="pname">${esc(r.name)}${r.win ? ' <span class="tag">Gagnant</span>' : ""}${r.note ? `<span class="rnote">${esc(r.note)}</span>` : ""}</span><span class="rrole">${ROLES[r.role] ? ROLES[r.role].name : ""}</span><span class="rt">${esc(r.value)}</span>`;
     ol.appendChild(li);
   });
   let best = 0; try { best = +localStorage.getItem("deadends.best") || 0; } catch {}
   const rb = $("rBest");
-  if (mine.time > best) { try { localStorage.setItem("deadends.best", String(mine.time)); } catch {} rb.textContent = "Nouveau record personnel de survie."; rb.className = "best new"; }
-  else { rb.textContent = `Ton record : ${fmtTime(best)}`; rb.className = "best"; }
+  if (mine.time > best && !M.score && m.mode !== "course") { try { localStorage.setItem("deadends.best", String(mine.time)); } catch {} rb.textContent = "Nouveau record personnel de survie."; rb.className = "best new"; }
+  else { rb.textContent = `Ton record de survie : ${fmtTime(best)}`; rb.className = "best"; }
   $("againBtn").hidden = !isHost; $("elsewhereBtn").hidden = !isHost; $("overWait").hidden = isHost;
   $("panel").hidden = false; showStep("stepOver");
   if (won) victoryFx();
-  cloudRecordGame({ time: mine.time || 0, dist: mine.trail || 0, wave, won, multi: !!net && results.length > 1 });
+  cloudRecordGame({ time: mine.time || 0, dist: mine.trail || 0, wave: m.wave, won, multi: !!net && rows.length > 1 });
+  // classements en ligne des modes prototypes
+  $("boardBox").hidden = true;
+  if (m.mode === "course" && zone && zone.start) showBoard("course", routeKey(zone), mine.note === "Arrivé" ? parseClock(mine.value) : null);
+  if (m.mode === "defi") showBoard("defi", todayKey(), mine.time, m.wave);
+}
+function parseClock(v) { const r = /^(\d+):(\d+(?:\.\d+)?)$/.exec(v || ""); return r ? +r[1] * 60 + +r[2] : null; }
+function routeKey(z) { const f = (v) => v.toFixed(4); return `${f(z.start.lat)}_${f(z.start.lon)}_${f(z.finish.lat)}_${f(z.finish.lon)}`; }
+async function showBoard(kind, key, myTime, wave) {
+  const box = $("boardBox"), ol = $("board"), title = $("boardTitle");
+  box.hidden = false; ol.innerHTML = "";
+  title.textContent = kind === "course" ? "Meilleurs temps sur ce trajet" : `Classement du défi du ${key.split("-").reverse().join("/")}`;
+  if (!Cloud.user) { $("boardMsg").textContent = "Connecte-toi avec Google (en haut à droite) pour enregistrer tes temps et voir le classement."; return; }
+  $("boardMsg").textContent = "Chargement du classement…";
+  try {
+    if (myTime != null) await (kind === "course" ? cloudSubmitRoute(key, myTime) : cloudSubmitDaily(key, myTime, wave));
+    const top = await (kind === "course" ? cloudTopRoute(key) : cloudTopDaily(key));
+    $("boardMsg").textContent = top.length ? "" : "Pas encore de temps enregistré.";
+    top.forEach((r, i) => {
+      const li = document.createElement("li"); if (r.uid === cloudUid()) li.className = "me";
+      li.innerHTML = `<span class="rk">${i + 1}</span><span class="pdot" style="background:${r.uid === cloudUid() ? "var(--sodium)" : "var(--line)"}"></span><span class="pname">${esc(r.name)}${relationTo(r.uid) === "friend" ? '<span class="rnote">Ami</span>' : ""}</span><span class="rrole">${kind === "defi" && r.wave ? "vague " + r.wave : ""}</span><span class="rt">${fmtTime(r.time)}</span>`;
+      ol.appendChild(li);
+    });
+  } catch (e) { console.warn("Classement", e); $("boardMsg").textContent = "Impossible de charger le classement pour le moment."; }
 }
 // Petite pluie d'étincelles couleur sodium pour le vainqueur
 function victoryFx() {
@@ -2204,7 +3022,7 @@ $("createBtn").addEventListener("click", startHost);
 $("soloBtn").addEventListener("click", startSolo);
 $("joinForm").addEventListener("submit", (e) => { e.preventDefault(); startJoin($("codeInput").value); });
 $("leaveBtn").addEventListener("click", () => { leaving = true; goMenu(); leaving = false; });
-$("loadBtn").addEventListener("click", () => { if (picked && !loading) hostStartLoad(false); });
+$("loadBtn").addEventListener("click", () => { if (!loading && currentZone()) hostStartLoad(false); });
 $("cancelBtn").addEventListener("click", () => { if (loadCtl) loadCtl.abort(); });
 $("retryBtn").addEventListener("click", () => { const p = me(); if (p) { p.failed = false; } if (isHost) pushLobby(); startLoading(); });
 $("fakeBtn").addEventListener("click", () => hostStartLoad(true));
@@ -2391,6 +3209,29 @@ function cloudRecordGame(r) {
   userRef(Cloud.user.uid).update(upd).catch((e) => console.warn("Stats", e));
 }
 
+/* ---------- Classements (modes prototypes) ---------- */
+const boardName = () => cleanName((Cloud.profile && Cloud.profile.name) || myName || "Joueur");
+async function cloudSubmitRoute(key, time) {
+  if (!Cloud.user) return;
+  const ref = Cloud.db.collection("routes").doc(key).collection("times").doc(Cloud.user.uid);
+  const s = await ref.get(); if (s.exists && s.data().time <= time) return; // on garde le meilleur temps
+  await ref.set({ name: boardName(), time: Math.round(time * 10) / 10, at: FV().serverTimestamp() });
+}
+async function cloudTopRoute(key) {
+  const qs = await Cloud.db.collection("routes").doc(key).collection("times").orderBy("time").limit(10).get();
+  return qs.docs.map((d) => ({ uid: d.id, ...d.data() }));
+}
+async function cloudSubmitDaily(day, time, wave) {
+  if (!Cloud.user) return;
+  const ref = Cloud.db.collection("daily").doc(day).collection("scores").doc(Cloud.user.uid);
+  const s = await ref.get(); if (s.exists && s.data().time >= time) return;
+  await ref.set({ name: boardName(), time: Math.round(time * 10) / 10, wave: wave || 0, at: FV().serverTimestamp() });
+}
+async function cloudTopDaily(day) {
+  const qs = await Cloud.db.collection("daily").doc(day).collection("scores").orderBy("time", "desc").limit(10).get();
+  return qs.docs.map((d) => ({ uid: d.id, ...d.data() }));
+}
+
 /* ---------- Présence (pour que tes amis voient si tu es en ligne et puissent te rejoindre) ---------- */
 function presenceNow() {
   if (state === "play" || state === "countdown") return { status: net ? "playing" : "solo", party: null };
@@ -2554,7 +3395,7 @@ if (cartoKey) acceptKey(cartoKey); else askKey();
 
 // Accès pour le débogage depuis la console
 window.PZ = {
-  get G() { return G; }, get game() { return game; }, get state() { return state; }, get players() { return players; },
+  get G() { return G; }, get game() { return game; }, get state() { return state; }, get players() { return players; }, get mode() { return gameMode; },
   get net() { return net; }, get myId() { return myId; }, CFG, ROLES, route, snap, computeField, followDrawn, toLL, fakeCity,
 };
 </script>
