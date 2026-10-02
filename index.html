@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@700;900&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&display=swap">
-<link rel="stylesheet" href="css/style.css?v=2">
+<link rel="stylesheet" href="css/style.css?v=3">
 </head>
 <body>
 <div id="map" aria-label="Carte du jeu"></div>
@@ -122,10 +122,11 @@
   </div>
 
   <div class="step" id="stepRole" hidden>
-    <span class="eyebrow">Ta classe <span class="fine">(compétence : touche A)</span></span>
     <p class="fine" id="roleMode"></p>
     <div id="teamBox" hidden><span class="eyebrow">Ton équipe</span><div class="teampick" id="teamPick"></div></div>
+    <span class="eyebrow">Ta classe</span>
     <div class="roles" id="roleList"></div>
+    <div class="roleinfo" id="roleInfo" aria-live="polite"></div>
     <button class="ready" id="readyBtn">Je suis prêt</button>
     <button class="primary" id="launchBtn" hidden>Lancer la partie</button>
     <p class="fine" id="roleWait" hidden>L'hôte lance la partie dès que tout le monde est prêt.</p>
@@ -240,20 +241,20 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/config.js?v=2"></script>
-<script src="js/carte.js?v=2"></script>
-<script src="js/chemins.js?v=2"></script>
-<script src="js/relief.js?v=2"></script>
-<script src="js/reseau.js?v=2"></script>
-<script src="js/salon.js?v=2"></script>
-<script src="js/partie.js?v=2"></script>
-<script src="js/zombies.js?v=2"></script>
-<script src="js/jeu.js?v=2"></script>
-<script src="js/rendu.js?v=2"></script>
-<script src="js/interface.js?v=2"></script>
-<script src="js/secteurs.js?v=2"></script>
-<script src="js/debut-fin.js?v=2"></script>
-<script src="js/compte.js?v=2"></script>
-<script src="js/demarrage.js?v=2"></script>
+<script src="js/config.js?v=3"></script>
+<script src="js/carte.js?v=3"></script>
+<script src="js/chemins.js?v=3"></script>
+<script src="js/relief.js?v=3"></script>
+<script src="js/reseau.js?v=3"></script>
+<script src="js/salon.js?v=3"></script>
+<script src="js/partie.js?v=3"></script>
+<script src="js/zombies.js?v=3"></script>
+<script src="js/jeu.js?v=3"></script>
+<script src="js/rendu.js?v=3"></script>
+<script src="js/interface.js?v=3"></script>
+<script src="js/secteurs.js?v=3"></script>
+<script src="js/debut-fin.js?v=3"></script>
+<script src="js/compte.js?v=3"></script>
+<script src="js/demarrage.js?v=3"></script>
 </body>
 </html>
