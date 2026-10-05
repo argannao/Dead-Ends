@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@700;900&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&display=swap">
-<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
 <div id="map" aria-label="Carte du jeu"></div>
@@ -72,9 +72,9 @@
       <span class="fine">Envoie ce code à tes amis : ils le saisissent dans « Rejoindre une partie ».</span>
     </div>
     <div class="step" id="hostZone">
-      <label class="eyebrow" for="modeSel">Mode de jeu</label>
-      <select id="modeSel"></select>
-      <p class="fine modedesc" id="modeDesc"></p>
+      <span class="eyebrow">Mode de jeu</span>
+      <div class="modes" id="modeList" role="radiogroup" aria-label="Mode de jeu"></div>
+      <div class="modeinfo" id="modeInfo" aria-live="polite"></div>
       <span class="eyebrow">Le lieu</span>
       <div class="seg two" id="pinRow" role="radiogroup" aria-label="Point à placer" hidden>
         <label><input type="radio" name="pin" value="start" checked><span class="t">Départ</span><span class="d">point zéro</span></label>
@@ -88,14 +88,21 @@
       <div class="status" id="zoneStatus"></div>
       <div class="step" id="radiusBox">
       <span class="eyebrow">Taille de la zone</span>
-      <div class="seg" role="radiogroup" aria-label="Taille de la zone">
-        <label><input type="radio" name="radius" id="r800" value="800"><span class="t">Quartier</span><span class="d">r = 800 m</span></label>
-        <label><input type="radio" name="radius" id="r1500" value="1500" checked><span class="t">Ville</span><span class="d">r = 1,5 km</span></label>
-        <label><input type="radio" name="radius" id="r2500" value="2500"><span class="t">Large</span><span class="d">r = 2,5 km</span></label>
+      <div class="seg four" role="radiogroup" aria-label="Taille de la zone">
+        <label><input type="radio" name="radius" id="r800" value="800"><span class="t">Quartier</span><span class="d">800 m</span></label>
+        <label><input type="radio" name="radius" id="r1500" value="1500" checked><span class="t">Ville</span><span class="d">1,5 km</span></label>
+        <label><input type="radio" name="radius" id="r2500" value="2500"><span class="t">Large</span><span class="d">2,5 km</span></label>
+        <label><input type="radio" name="radius" id="rCustom" value="custom"><span class="t">Perso</span><span class="d" id="customD">1,2 km</span></label>
       </div>
+      <div class="rrange" id="customBox" hidden>
+        <input type="range" id="radiusRange" min="300" max="4000" step="100" value="1200" aria-label="Rayon personnalisé">
+        <output id="radiusOut" for="radiusRange">1,2 km</output>
+      </div>
+      <p class="fine slow" id="radiusWarn" hidden>Grande zone : le premier chargement peut prendre plusieurs minutes.</p>
       </div>
       <label class="check"><input type="checkbox" id="withPaths" checked> <span>Inclure les chemins piétons et allées <span class="fine">(sentiers, passages, parkings)</span></span></label>
       <p class="fine prefetch" id="hostPrefetch"></p>
+      <p class="fine cachelegend"><span class="sw lit"></span>secteurs déjà en cache, chargés tout de suite <span class="sw dim"></span>à télécharger</p>
       <button class="primary" id="loadBtn" disabled>Charger la zone</button>
     </div>
     <div class="step" id="guestZone" hidden>
@@ -103,6 +110,7 @@
       <span class="eyebrow">Le lieu</span>
       <p class="note" id="guestZoneText">L'hôte choisit où l'infection commence…</p>
       <p class="fine prefetch" id="guestPrefetch"></p>
+      <p class="fine cachelegend"><span class="sw lit"></span>secteurs déjà en cache, chargés tout de suite <span class="sw dim"></span>à télécharger</p>
     </div>
   </div>
 
@@ -241,20 +249,21 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/config.js?v=3"></script>
-<script src="js/carte.js?v=3"></script>
-<script src="js/chemins.js?v=3"></script>
-<script src="js/relief.js?v=3"></script>
-<script src="js/reseau.js?v=3"></script>
-<script src="js/salon.js?v=3"></script>
-<script src="js/partie.js?v=3"></script>
-<script src="js/zombies.js?v=3"></script>
-<script src="js/jeu.js?v=3"></script>
-<script src="js/rendu.js?v=3"></script>
-<script src="js/interface.js?v=3"></script>
-<script src="js/secteurs.js?v=3"></script>
-<script src="js/debut-fin.js?v=3"></script>
-<script src="js/compte.js?v=3"></script>
-<script src="js/demarrage.js?v=3"></script>
+<script src="js/config.js?v=4"></script>
+<script src="js/carte.js?v=4"></script>
+<script src="js/chemins.js?v=4"></script>
+<script src="js/relief.js?v=4"></script>
+<script src="js/reseau.js?v=4"></script>
+<script src="js/salon.js?v=4"></script>
+<script src="js/partie.js?v=4"></script>
+<script src="js/zombies.js?v=4"></script>
+<script src="js/jeu.js?v=4"></script>
+<script src="js/bots.js?v=4"></script>
+<script src="js/rendu.js?v=4"></script>
+<script src="js/interface.js?v=4"></script>
+<script src="js/secteurs.js?v=4"></script>
+<script src="js/debut-fin.js?v=4"></script>
+<script src="js/compte.js?v=4"></script>
+<script src="js/demarrage.js?v=4"></script>
 </body>
 </html>

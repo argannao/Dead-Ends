@@ -41,8 +41,47 @@ async function idbGet(k) {
     catch { res(null); }
   });
 }
-async function idbPut(k, txt) { const db = await idb(); if (!db) return; try { db.transaction("cells", "readwrite").objectStore("cells").put({ t: Date.now(), d: txt }, k); } catch {} }
+async function idbPut(k, txt) {
+  if (cachedKeys && k.startsWith(QVER)) { cachedKeys.add(k.slice(QVER.length)); drawCacheSoon(); }
+  const db = await idb(); if (!db) return; try { db.transaction("cells", "readwrite").objectStore("cells").put({ t: Date.now(), d: txt }, k); } catch {}
+}
 function memPut(k, d) { memCells.set(k, d); if (memCells.size > 60) memCells.delete(memCells.keys().next().value); }
+
+/* ---------- Secteurs en cache sur la carte du salon ----------
+   Les secteurs déjà téléchargés (cette session ou une précédente) sont éclairés : une zone qui en est couverte
+   se charge tout de suite. Les secteurs de la zone choisie qui restent à télécharger sont juste tracés en pointillé. */
+let cachedKeys = null, cacheLayer = null, cacheTimer = 0;
+async function loadCachedKeys() {
+  if (cachedKeys) return cachedKeys;
+  const db = await idb(); const set = new Set();
+  if (db) await new Promise((res) => {
+    try { const r = db.transaction("cells").objectStore("cells").getAllKeys(); r.onsuccess = () => { for (const k of r.result || []) if (String(k).startsWith(QVER)) set.add(String(k).slice(QVER.length)); res(); }; r.onerror = () => res(); }
+    catch { res(); }
+  });
+  for (const k of memCells.keys()) set.add(k);
+  cachedKeys = set; return set;
+}
+function cellBounds(key) {
+  const [lf, i, j] = key.split(":").map(Number), dLat = CELL_DEG, dLon = CELL_DEG / Math.cos(lf * Math.PI / 180);
+  return [[i * dLat, j * dLon], [(i + 1) * dLat, (j + 1) * dLon]];
+}
+function drawCacheSoon() { clearTimeout(cacheTimer); cacheTimer = setTimeout(drawCache, 150); }
+async function drawCache() {
+  if (!cacheLayer) cacheLayer = L.layerGroup().addTo(map);
+  cacheLayer.clearLayers();
+  if (state !== "lobby" || map.getZoom() < 11) return;
+  const keys = await loadCachedKeys(); if (state !== "lobby") return;
+  const view = map.getBounds().pad(0.2), lit = css("--sodium");
+  let n = 0;
+  for (const k of keys) {
+    const b = cellBounds(k); if (!view.intersects(b)) continue;
+    cacheLayer.addLayer(L.rectangle(b, { color: lit, weight: 1, opacity: 0.45, fillColor: lit, fillOpacity: 0.13, interactive: false }));
+    if (++n > 800) break;
+  }
+  if (zone && !zone.fake) for (const c of makeCells(zone.lat, zone.lon, zone.r)) if (!keys.has(c.key))
+    cacheLayer.addLayer(L.rectangle([[c.s, c.w], [c.n, c.e]], { color: "#8a99a8", weight: 1, opacity: 0.35, dashArray: "3 5", fill: false, interactive: false }));
+}
+map.on("moveend", () => { if (state === "lobby") drawCacheSoon(); });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const abortErr = () => new DOMException("Annulé", "AbortError");
 
@@ -216,11 +255,13 @@ let prefetchTimer = 0, prefetchTok = 0, prefetchCells = null;
 function schedulePrefetch() {
   clearTimeout(prefetchTimer);
   const z = zone; const tok = ++prefetchTok;
+  drawCacheSoon();
   if (!z || z.fake) { $("hostPrefetch").textContent = ""; $("guestPrefetch").textContent = ""; return; }
   prefetchTimer = setTimeout(async () => {
     const cells = makeCells(z.lat, z.lon, z.r); prefetchCells = cells;
     const show = () => {
       if (tok !== prefetchTok || state !== "lobby") return;
+      if (cachedKeys) { let added = false; for (const c of cells) if (c.st === "done" && !cachedKeys.has(c.key)) { cachedKeys.add(c.key); added = true; } if (added) drawCacheSoon(); }
       const done = cells.filter((c) => c.st === "done").length;
       const mineN = cells.filter((c) => c.owner === myId).length, mineDone = cells.filter((c) => c.owner === myId && c.st === "done").length;
       const t = done === cells.length ? `Rues de la zone déjà téléchargées (${done} / ${cells.length} secteurs) : le chargement sera immédiat.`

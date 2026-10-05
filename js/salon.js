@@ -139,7 +139,7 @@ function lstatus(t, cls) { const s = $("loadStatus"); s.textContent = t; s.class
 
 /* ---------------- Classes (choix avant la partie) ---------------- */
 function enterRole() {
-  state = "role"; game = null;
+  state = "role"; game = null; removeBots();
   for (const p of players.values()) { p.ready = false; p.alive = true; p.time = 0; }
   $("panel").hidden = false; $("hud").hidden = true;
   map.dragging.enable(); map.doubleClickZoom.enable();
@@ -177,7 +177,7 @@ function refreshRoleButtons() {
   $("launchBtn").hidden = !isHost; $("backBtn").hidden = !isHost;
   const all = [...players.values()];
   const allReady = !net || all.every((q) => q.ready);
-  const M = MODES[gameMode] || MODES.survie, enough = all.length >= M.min;
+  const M = MODES[gameMode] || MODES.survie, enough = all.length >= M.min || (!net && M.bots);
   $("launchBtn").disabled = !allReady || !enough;
   $("launchBtn").textContent = !enough ? `${M.name} : ${M.min} joueurs minimum` : !net || allReady ? "Lancer la partie" : `Lancer (${all.filter((q) => q.ready).length} / ${all.length} prêts)`;
   $("roleWait").hidden = isHost || !p.ready;
@@ -198,7 +198,9 @@ async function hostLaunch() {
   const p = me(); p.role = myRole(); p.ready = true;
   const all = [...players.values()];
   if (net && !all.every((q) => q.ready)) return;
-  if (all.length < (MODES[gameMode] || MODES.survie).min) return;
+  const M = MODES[gameMode] || MODES.survie;
+  if (!net && M.bots) addBots(CFG.botCount); // horde en solo : des survivants pilotés par l'ordinateur
+  if ([...players.values()].length < M.min) return;
   const setup = makeSetup();
   if (gameMode === "sommet") {
     launching = true; $("launchBtn").disabled = true; $("launchBtn").textContent = "Calcul du relief…";
@@ -247,7 +249,8 @@ function makeSetup() {
     const b = pickNodeAround(sx, sy, 700, 1100, rnd, (n) => { let d = Math.abs(Math.atan2(G.Y[n] - sy, G.X[n] - sx) - angA); if (d > Math.PI) d = 2 * Math.PI - d; return d > 1.8; });
     st.dests = [a, b].map((n, t) => ({ x: G.X[n], y: G.Y[n], node: n, team: t }));
   }
-  if (gameMode === "horde") {
+  if (gameMode === "horde" && !net) st.masters = [myId]; // solo : tu diriges la horde
+  else if (gameMode === "horde") {
     // ceux qui ont choisi la horde la dirigent (au moins 1 survivant) ; sinon on tire au sort parmi les « au hasard », puis parmi tous
     const sh = shuffle(ids.slice(), rnd), pick = (id) => (players.get(id) || {}).tpick;
     let m = sh.filter((id) => pick(id) === "horde").slice(0, Math.max(1, ids.length - 1));

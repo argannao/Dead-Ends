@@ -329,3 +329,32 @@ select:focus-visible { outline: 2px solid var(--sodium); outline-offset: 2px; }
 .roleinfo .pf { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--muted); line-height: 1.35; }
 .roleinfo .plus::before { content: "+ "; color: var(--ok); font-weight: 700; }
 .roleinfo .minus::before { content: "− "; color: #ff9b9e; font-weight: 700; }
+
+/* ---------- Choix du mode : tuiles + fiche ---------- */
+.modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.mode { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 9px 2px 7px;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--night); cursor: pointer; text-align: center; }
+.mode input { position: absolute; opacity: 0; pointer-events: none; }
+.mode svg { width: 24px; height: 24px; fill: none; stroke: var(--muted); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.mode .mname { font: 600 11.5px/1.05 var(--f-label); letter-spacing: .02em; color: var(--muted); }
+.mode.isproto::after { content: ""; position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: #b58cff; }
+.mode:hover { border-color: #3a4655; }
+.mode:has(input:checked) { border-color: var(--sodium); background: #1a140b; }
+.mode:has(input:checked) svg { stroke: var(--sodium); }
+.mode:has(input:checked) .mname { color: var(--ink); }
+.mode:has(input:disabled) { opacity: .35; cursor: not-allowed; }
+.mode:has(input:focus-visible) { outline: 2px solid var(--sodium); outline-offset: 2px; }
+.modeinfo { border-left: 3px solid var(--sodium); padding: 6px 0 6px 12px; display: flex; flex-direction: column; gap: 4px; }
+.modeinfo h3 { margin: 0; font: 700 19px/1.05 var(--f-label); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.modeinfo p { margin: 0; font-size: 13.5px; line-height: 1.4; }
+.modeinfo .who { font-size: 12px; color: var(--muted); }
+
+/* ---------- Rayon personnalisé et légende du cache ---------- */
+.seg.four { grid-template-columns: repeat(4, 1fr); }
+.rrange { display: flex; align-items: center; gap: 10px; }
+.rrange input { flex: 1; accent-color: var(--sodium); }
+.rrange output { font: 600 13px/1 var(--f-mono); color: var(--sodium); min-width: 5ch; text-align: right; }
+.cachelegend { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cachelegend .sw { width: 12px; height: 9px; border-radius: 1px; display: inline-block; }
+.cachelegend .sw.lit { background: rgba(255,173,66,.25); border: 1px solid rgba(255,173,66,.7); }
+.cachelegend .sw.dim { border: 1px dashed rgba(138,153,168,.7); margin-left: 6px; }

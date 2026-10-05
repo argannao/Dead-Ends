@@ -10,7 +10,7 @@ Dead Ends est un jeu de survie multijoueur qui se joue directement dans le navig
 
 ## 🎮 Principe
 
-1. L'hôte crée un salon, choisit un lieu et un mode de jeu.
+1. L'hôte crée un salon, choisit un mode de jeu, un lieu et la taille de la zone (Quartier, Ville, Large ou rayon personnalisé de 300 m à 4 km). Sur la carte, les secteurs déjà en cache sont éclairés : une zone qui en est couverte se charge tout de suite.
 2. Les joueurs rejoignent avec un **code de partie** (jusqu'à 8 joueurs), choisissent leur classe et, dans les modes en équipes, leur équipe.
 3. **3… 2… 1… GO !** Tout le monde s'enfuit.
 4. Les zombies apparaissent au point de départ, puis par vagues depuis des points aléatoires annoncés quelques secondes à l'avance.
@@ -50,7 +50,7 @@ Dead Ends est un jeu de survie multijoueur qui se joue directement dans le navig
 | Chasse au trésor | 1+ | Meilleur score en 6 min |
 | Roi de la colline | 1+ | 120 points, ou le plus de points en 6 min |
 | Escorte | 2+ | Équipe bleue contre équipe rouge : amener son VIP à destination en premier |
-| Zombies contre survivants | 2+ | Survivants : tenir 6 min · Horde : tout attraper |
+| Zombies contre survivants | 1+ | Survivants : tenir 6 min · Horde : tout attraper. En solo, tu diriges la horde contre 4 survivants pilotés par l'ordinateur |
 | Tenir jusqu'à l'aube *(prototype)* | 1+ | Tenir 10 min, relever ses coéquipiers à terre |
 | Course contre la montre *(prototype)* | 1+ | Meilleur temps sur un trajet, avec classement |
 | Sommet *(prototype)* | 1+ | Atteindre le premier le point le plus haut de la zone ; les montées ralentissent et épuisent, les descentes accélèrent |
@@ -86,6 +86,7 @@ js/salon.js         salon, chargement partagé, choix des classes et des équipe
 js/partie.js        préparation d'une partie
 js/zombies.js       IA des zombies, barricades
 js/jeu.js           compétences, simulation, règles des modes
+js/bots.js          survivants pilotés par l'ordinateur (horde en solo)
 js/rendu.js         dessin des joueurs, zombies et repères
 js/interface.js     HUD, boucle de jeu, commandes, choix du lieu
 js/secteurs.js      téléchargement des rues, cache, partage entre joueurs
@@ -95,7 +96,7 @@ js/demarrage.js     lance le jeu une fois tout chargé
 firestore.rules     règles de sécurité Firebase
 ```
 
-Les fichiers sont appelés avec un numéro de version (`?v=3`) dans `index.html` : l'augmenter à chaque mise à jour force les navigateurs à recharger les nouveaux fichiers.
+Les fichiers sont appelés avec un numéro de version (`?v=4`) dans `index.html` : l'augmenter à chaque mise à jour force les navigateurs à recharger les nouveaux fichiers.
 
 ## 🔑 Clé CARTO
 

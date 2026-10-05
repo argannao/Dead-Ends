@@ -119,6 +119,7 @@ function hostUpdate(dt) {
     mine.x = P.x; mine.y = P.y; mine.dir = P.dir; mine.trail = P.trail; mine.sp = { x: P.x, y: P.y, a: P.a, b: P.b };
     mine.sprint = !!gm.sprinting; mine.nx = P.route.filter((w) => w.n >= 0).slice(0, 4).map((w) => w.n);
   }
+  botsUpdate(dt); // survivants pilotés par l'ordinateur (horde en solo)
   modeTick(dt);
   if (gm.ended) return;
   // fin des effets temporaires

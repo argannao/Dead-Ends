@@ -65,6 +65,7 @@ const CFG = {
   reviveTime: 3,        // s à côté d'un coéquipier à terre pour le relever
   reviveR: 12,          // m
   bleedOut: 60,         // s : un joueur à terre non relevé meurt
+  botCount: 4,          // survivants pilotés par l'ordinateur (horde en solo)
   // Mode Sommet : effet des pentes (joueurs et zombies)
   slopeUp: 6,           // en montée, vitesse ÷ (1 + 6 × pente) : −38 % à 10 %
   slopeDown: 2.5,       // en descente, vitesse × (1 + 2,5 × pente)
@@ -114,11 +115,25 @@ const MODES = {
   tresor:     { name: "Chasse au trésor", min: 1, score: true, desc: "Ramasse les caisses : points et bonus. Meilleur score en 6 min. Mourir coûte la moitié de tes points." },
   colline:    { name: "Roi de la colline", min: 1, score: true, desc: "Marque des points en restant seul dans la zone. Elle se déplace et attire la horde. 120 points ou 6 min." },
   escorte:    { name: "Escorte", min: 2, team: true, desc: "Deux équipes, un VIP chacune (plus lent). Le premier VIP arrivé à sa destination fait gagner son équipe." },
-  horde:      { name: "Zombies contre survivants", min: 2, team: true, desc: "Un ou deux joueurs dirigent la horde (clic pour la guider, A pour hurler). Les survivants doivent tenir 6 min." },
+  horde:      { name: "Zombies contre survivants", min: 2, team: true, bots: true, desc: "Un ou deux joueurs dirigent la horde (clic pour la guider, A pour hurler). Les survivants doivent tenir 6 min." },
   aube:       { name: "Tenir jusqu'à l'aube", min: 1, proto: true, coop: true, desc: "10 min de nuit qui s'éclaircit. Un joueur attrapé tombe à terre : reste 3 s près de lui pour le relever. Si quelqu'un tient jusqu'à l'aube, tout le monde gagne." },
   course:     { name: "Course contre la montre", min: 1, proto: true, desc: "Rejoins l'arrivée le plus vite possible, horde aux trousses. Meilleurs temps enregistrés pour chaque trajet." },
   sommet:     { name: "Sommet", min: 1, proto: true, desc: "Le premier à atteindre le point le plus haut de la zone gagne. Les montées ralentissent et épuisent, les descentes accélèrent, zombies compris." },
   defi:       { name: "Défi du jour", min: 1, proto: true, desc: "Même lieu et mêmes vagues pour tout le monde aujourd'hui. Survis le plus longtemps : classement du jour." },
+};
+// Tuiles du choix du mode : nom court et pictogramme (SVG 24 × 24, trait)
+const MODE_TILES = {
+  survie:     ["Survivant", '<circle cx="12" cy="7" r="3"/><path d="M12 10v6m0 0-4 5m4-5 4 5M7 13l5-2 5 2"/>'],
+  extraction: ["Extraction", '<circle cx="12" cy="12" r="9"/><path d="M8.5 7.5v9m7-9v9m-7-4.5h7"/>'],
+  patient:    ["Patient zéro", '<circle cx="12" cy="12" r="2.5"/><circle cx="12" cy="5.5" r="3"/><circle cx="6.4" cy="15.3" r="3"/><circle cx="17.6" cy="15.3" r="3"/>'],
+  tresor:     ["Trésor", '<rect x="4" y="8" width="16" height="11" rx="1"/><path d="M4 12h16M12 8v11M7 8l2-3h6l2 3"/>'],
+  colline:    ["Colline", '<path d="M3 20 10 9l4 5 2-2 5 8z"/><path d="M10 9V3l5 2-5 2"/>'],
+  escorte:    ["Escorte", '<path d="m12 3 5 6-5 6-5-6z"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/>'],
+  horde:      ["Horde", '<circle cx="6" cy="8" r="2.2"/><circle cx="12" cy="6" r="2.2"/><circle cx="18" cy="8" r="2.2"/><circle cx="9" cy="14" r="2.2"/><circle cx="15" cy="14" r="2.2"/><circle cx="12" cy="20" r="2.2"/>'],
+  aube:       ["Aube", '<path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 7v3M5.6 11.6l2 2m10.8-2-2 2"/>'],
+  course:     ["Course", '<circle cx="12" cy="13" r="8"/><path d="M12 13V9m-2-6h4"/>'],
+  sommet:     ["Sommet", '<path d="m2 20 7-11 4 6 3-4 6 9z"/><path d="m7.5 11.5 1.5 1 1.5-1"/>'],
+  defi:       ["Défi du jour", '<rect x="4" y="5" width="16" height="15" rx="1"/><path d="M4 10h16M8 3v4m8-4v4M10 15l1.5 1.5L15 13"/>'],
 };
 const TEAMS = [{ name: "bleue", color: "#3b8cff" }, { name: "rouge", color: "#ff3d5a" }]; // bleu contre rouge : lisible aussi pour les daltoniens
 // Choix d'équipe dans le salon (modes en équipes)

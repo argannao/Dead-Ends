@@ -204,9 +204,19 @@ $("skillBtn").addEventListener("click", (e) => { e.stopPropagation(); useSkill()
 function showStep(id) {
   for (const s of ["stepKey", "stepMenu", "stepLobby", "stepLoad", "stepRole", "stepOver"]) $(s).hidden = s !== id;
   $("tagline").hidden = id === "stepOver";
+  if (id === "stepLobby") drawCacheSoon(); else if (cacheLayer) cacheLayer.clearLayers(); // secteurs en cache : seulement dans le salon
   renderPlayers();
 }
-function radius() { return +document.querySelector('input[name="radius"]:checked').value; }
+function radius() {
+  const v = document.querySelector('input[name="radius"]:checked').value;
+  return v === "custom" ? +$("radiusRange").value : +v;
+}
+const fmtR = (r) => (r >= 1000 ? `${(r / 1000).toFixed(1).replace(".0", "").replace(".", ",")} km` : `${r} m`);
+function radiusUi() {
+  const custom = document.querySelector('input[name="radius"]:checked').value === "custom", r = +$("radiusRange").value;
+  $("customBox").hidden = !custom; $("radiusOut").textContent = fmtR(r); $("customD").textContent = fmtR(r);
+  $("radiusWarn").hidden = !(custom && r > 2500);
+}
 let finishPick = null, finishMarker = null;
 const pinMode = () => (document.querySelector('input[name="pin"]:checked') || {}).value || "start";
 function lobbyMapClick(ll) {
@@ -263,12 +273,27 @@ function updateZoneInfo() {
   } else t = picked ? `Point zéro : <b>${picked.lat.toFixed(5)}, ${picked.lon.toFixed(5)}</b>` : "Clique sur la carte pour placer le point zéro.";
   $("pickInfo").innerHTML = t;
   $("loadBtn").disabled = !z;
-  $("modeDesc").textContent = M.desc;
+}
+// Choix du mode : tuiles + fiche du mode choisi
+function modeOk(k) { const M = MODES[k]; return !!net || M.min <= 1 || M.bots; } // en solo, les modes à plusieurs sont grisés
+function renderModes() {
+  $("modeList").innerHTML = Object.entries(MODES).map(([k, M]) => {
+    const [short, icon] = MODE_TILES[k] || [M.name, ""], ok = modeOk(k);
+    return `<label class="mode${M.proto ? " isproto" : ""}" title="${ok ? M.name : M.name + " : multijoueur uniquement"}"><input type="radio" name="mode" value="${k}"${k === gameMode ? " checked" : ""}${ok ? "" : " disabled"}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg><span class="mname">${short}</span></label>`;
+  }).join("");
+  document.querySelectorAll('input[name="mode"]').forEach((r) => r.addEventListener("change", () => setMode(r.value)));
+  renderModeInfo();
+}
+function renderModeInfo() {
+  const M = MODES[gameMode] || MODES.survie;
+  const who = M.bots && !net ? "Solo : tu diriges la horde contre 4 survivants pilotés par l'ordinateur" : M.coop ? "Coopératif, de 1 à 8 joueurs" : M.min > 1 ? `De ${M.min} à 8 joueurs` : "De 1 à 8 joueurs";
+  $("modeInfo").innerHTML = `<h3>${M.name}${M.proto ? ' <span class="proto">Prototype</span>' : ""}</h3><p>${M.desc}</p><p class="who">${who}</p>`;
 }
 function setMode(k) {
-  if (!MODES[k]) k = "survie";
+  if (!MODES[k] || !modeOk(k)) k = "survie";
   gameMode = k;
-  if ($("modeSel").value !== k) $("modeSel").value = k;
+  renderModes();
   const course = k === "course", defi = k === "defi";
   $("pinRow").hidden = !course; $("radiusBox").hidden = course || defi; $("searchForm").hidden = defi;
   if (finishMarker && !course) { finishMarker.remove(); finishMarker = null; finishPick = null; }
@@ -276,12 +301,9 @@ function setMode(k) {
   zstatus("");
   zoneChanged();
 }
-function fillModeSelect() {
-  $("modeSel").innerHTML = Object.entries(MODES).map(([k, M]) => `<option value="${k}">${M.name}${M.proto ? " · prototype" : ""}${M.min > 1 ? ` (${M.min} joueurs min.)` : ""}</option>`).join("");
-}
-fillModeSelect();
-$("modeSel").addEventListener("change", (e) => setMode(e.target.value));
-document.querySelectorAll('input[name="radius"]').forEach((r) => r.addEventListener("change", zoneChanged));
+document.querySelectorAll('input[name="radius"]').forEach((r) => r.addEventListener("change", () => { radiusUi(); zoneChanged(); }));
+$("radiusRange").addEventListener("input", () => { radiusUi(); zoneChanged(); });
+radiusUi();
 $("withPaths").addEventListener("change", zoneChanged);
 $("searchForm").addEventListener("submit", async (e) => {
   e.preventDefault();
